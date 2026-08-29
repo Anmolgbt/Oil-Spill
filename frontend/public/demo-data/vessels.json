@@ -1,0 +1,677 @@
+{
+  "vessels": [
+    {
+      "vessel_id": "V001",
+      "vessel_name": "MV Ocean Crest",
+      "mmsi": "419887210",
+      "vessel_type": "Crude Oil Tanker",
+      "flag": "Panama",
+      "ais_dark": false,
+      "factors": {
+        "time_match": 95,
+        "source_overlap": 96,
+        "trajectory": 94,
+        "distance_km": 0.9,
+        "behaviour": 70,
+        "ais_consistency": 90,
+        "relevance": 80,
+        "distance_score": 91.0
+      },
+      "labels": {
+        "time_match": "Excellent",
+        "source_overlap": "High",
+        "trajectory": "Excellent",
+        "behaviour": "Anomalous"
+      },
+      "attribution_score": 91,
+      "confidence": "High",
+      "status": "High priority",
+      "evidence": [
+        "Strong source-region overlap",
+        "Release-time window match",
+        "High trajectory similarity to hindcast path",
+        "Close proximity to inferred origin",
+        "Speed anomaly detected during release window",
+        "AIS continuity acceptable"
+      ],
+      "assessment": "HIGH-PRIORITY INVESTIGATION CANDIDATE",
+      "track": [
+        {
+          "time": "2026-08-15T09:30:00Z",
+          "lat": 19.70882,
+          "lon": 71.44507,
+          "speed_kt": 12.5,
+          "heading": 214.7
+        },
+        {
+          "time": "2026-08-15T09:45:00Z",
+          "lat": 19.66609,
+          "lon": 71.41361,
+          "speed_kt": 12.5,
+          "heading": 212.7
+        },
+        {
+          "time": "2026-08-15T10:00:00Z",
+          "lat": 19.62232,
+          "lon": 71.38382,
+          "speed_kt": 12.5,
+          "heading": 216.6
+        },
+        {
+          "time": "2026-08-15T10:15:00Z",
+          "lat": 19.58058,
+          "lon": 71.35092,
+          "speed_kt": 12.5,
+          "heading": 211.8
+        },
+        {
+          "time": "2026-08-15T10:30:00Z",
+          "lat": 19.53638,
+          "lon": 71.32187,
+          "speed_kt": 3.0,
+          "heading": 217.5
+        },
+        {
+          "time": "2026-08-15T10:45:00Z",
+          "lat": 19.52648,
+          "lon": 71.31381,
+          "speed_kt": 3.0,
+          "heading": 213.2
+        },
+        {
+          "time": "2026-08-15T11:00:00Z",
+          "lat": 19.51604,
+          "lon": 71.30655,
+          "speed_kt": 3.0,
+          "heading": 214.9
+        },
+        {
+          "time": "2026-08-15T11:15:00Z",
+          "lat": 19.5058,
+          "lon": 71.29898,
+          "speed_kt": 12.5,
+          "heading": 214.3
+        },
+        {
+          "time": "2026-08-15T11:30:00Z",
+          "lat": 19.46283,
+          "lon": 71.26794,
+          "speed_kt": 12.5,
+          "heading": 214.5
+        },
+        {
+          "time": "2026-08-15T11:45:00Z",
+          "lat": 19.41998,
+          "lon": 71.23672,
+          "speed_kt": 12.5,
+          "heading": 217.3
+        },
+        {
+          "time": "2026-08-15T12:00:00Z",
+          "lat": 19.37862,
+          "lon": 71.20332,
+          "speed_kt": 12.5,
+          "heading": 217.7
+        }
+      ]
+    },
+    {
+      "vessel_id": "V002",
+      "vessel_name": "MT Blue Horizon",
+      "mmsi": "373662044",
+      "vessel_type": "Product Tanker",
+      "flag": "Liberia",
+      "ais_dark": false,
+      "factors": {
+        "time_match": 80,
+        "source_overlap": 65,
+        "trajectory": 78,
+        "distance_km": 3.4,
+        "behaviour": 40,
+        "ais_consistency": 85,
+        "relevance": 70,
+        "distance_score": 66.0
+      },
+      "labels": {
+        "time_match": "Good",
+        "source_overlap": "Medium",
+        "trajectory": "Good",
+        "behaviour": "Normal"
+      },
+      "attribution_score": 70,
+      "confidence": "Medium",
+      "status": "Medium",
+      "evidence": [
+        "Strong source-region overlap",
+        "Release-time window match",
+        "High trajectory similarity to hindcast path",
+        "Moderate proximity to inferred origin",
+        "AIS continuity acceptable"
+      ],
+      "assessment": "MODERATE-PRIORITY CANDIDATE",
+      "track": [
+        {
+          "time": "2026-08-15T09:30:00Z",
+          "lat": 19.74256,
+          "lon": 71.45069,
+          "speed_kt": 13.0,
+          "heading": 246.1
+        },
+        {
+          "time": "2026-08-15T09:45:00Z",
+          "lat": 19.72063,
+          "lon": 71.39818,
+          "speed_kt": 13.0,
+          "heading": 242.2
+        },
+        {
+          "time": "2026-08-15T10:00:00Z",
+          "lat": 19.69542,
+          "lon": 71.34737,
+          "speed_kt": 13.0,
+          "heading": 241.9
+        },
+        {
+          "time": "2026-08-15T10:15:00Z",
+          "lat": 19.66999,
+          "lon": 71.29669,
+          "speed_kt": 13.0,
+          "heading": 242.8
+        },
+        {
+          "time": "2026-08-15T10:30:00Z",
+          "lat": 19.64526,
+          "lon": 71.24563,
+          "speed_kt": 13.0,
+          "heading": 246.5
+        },
+        {
+          "time": "2026-08-15T10:45:00Z",
+          "lat": 19.62367,
+          "lon": 71.19299,
+          "speed_kt": 13.0,
+          "heading": 246.9
+        },
+        {
+          "time": "2026-08-15T11:00:00Z",
+          "lat": 19.60247,
+          "lon": 71.14018,
+          "speed_kt": 13.0,
+          "heading": 243.7
+        },
+        {
+          "time": "2026-08-15T11:15:00Z",
+          "lat": 19.57852,
+          "lon": 71.08872,
+          "speed_kt": 13.0,
+          "heading": 246.8
+        },
+        {
+          "time": "2026-08-15T11:30:00Z",
+          "lat": 19.55724,
+          "lon": 71.03596,
+          "speed_kt": 13.0,
+          "heading": 245.4
+        },
+        {
+          "time": "2026-08-15T11:45:00Z",
+          "lat": 19.53474,
+          "lon": 70.98378,
+          "speed_kt": 13.0,
+          "heading": 245.1
+        },
+        {
+          "time": "2026-08-15T12:00:00Z",
+          "lat": 19.51194,
+          "lon": 70.93176,
+          "speed_kt": 13.0,
+          "heading": 243.7
+        }
+      ]
+    },
+    {
+      "vessel_id": "V003",
+      "vessel_name": "MV Sea Falcon",
+      "mmsi": "257119887",
+      "vessel_type": "Bulk Carrier",
+      "flag": "Malta",
+      "ais_dark": false,
+      "factors": {
+        "time_match": 48,
+        "source_overlap": 45,
+        "trajectory": 44,
+        "distance_km": 7.2,
+        "behaviour": 25,
+        "ais_consistency": 80,
+        "relevance": 55,
+        "distance_score": 28.0
+      },
+      "labels": {
+        "time_match": "Fair",
+        "source_overlap": "Low",
+        "trajectory": "Poor",
+        "behaviour": "Normal"
+      },
+      "attribution_score": 43,
+      "confidence": "Low",
+      "status": "Low",
+      "evidence": [
+        "Partial source-region overlap",
+        "AIS continuity acceptable"
+      ],
+      "assessment": "LOW-PRIORITY CANDIDATE",
+      "track": [
+        {
+          "time": "2026-08-15T09:30:00Z",
+          "lat": 19.61016,
+          "lon": 71.44388,
+          "speed_kt": 14.5,
+          "heading": 157.6
+        },
+        {
+          "time": "2026-08-15T09:45:00Z",
+          "lat": 19.55442,
+          "lon": 71.46831,
+          "speed_kt": 14.5,
+          "heading": 152.4
+        },
+        {
+          "time": "2026-08-15T10:00:00Z",
+          "lat": 19.50096,
+          "lon": 71.49792,
+          "speed_kt": 14.5,
+          "heading": 155.0
+        },
+        {
+          "time": "2026-08-15T10:15:00Z",
+          "lat": 19.44632,
+          "lon": 71.52499,
+          "speed_kt": 14.5,
+          "heading": 153.8
+        },
+        {
+          "time": "2026-08-15T10:30:00Z",
+          "lat": 19.39221,
+          "lon": 71.55324,
+          "speed_kt": 14.5,
+          "heading": 157.0
+        },
+        {
+          "time": "2026-08-15T10:45:00Z",
+          "lat": 19.33672,
+          "lon": 71.57827,
+          "speed_kt": 14.5,
+          "heading": 155.4
+        },
+        {
+          "time": "2026-08-15T11:00:00Z",
+          "lat": 19.28188,
+          "lon": 71.60486,
+          "speed_kt": 14.5,
+          "heading": 156.9
+        },
+        {
+          "time": "2026-08-15T11:15:00Z",
+          "lat": 19.22642,
+          "lon": 71.62997,
+          "speed_kt": 14.5,
+          "heading": 151.9
+        },
+        {
+          "time": "2026-08-15T11:30:00Z",
+          "lat": 19.17323,
+          "lon": 71.66006,
+          "speed_kt": 14.5,
+          "heading": 154.7
+        },
+        {
+          "time": "2026-08-15T11:45:00Z",
+          "lat": 19.11871,
+          "lon": 71.68736,
+          "speed_kt": 14.5,
+          "heading": 156.3
+        },
+        {
+          "time": "2026-08-15T12:00:00Z",
+          "lat": 19.06348,
+          "lon": 71.713,
+          "speed_kt": 14.5,
+          "heading": 151.6
+        }
+      ]
+    },
+    {
+      "vessel_id": "V005",
+      "vessel_name": "MV Coastal Pioneer",
+      "mmsi": "416203355",
+      "vessel_type": "General Cargo",
+      "flag": "India",
+      "ais_dark": true,
+      "factors": {
+        "time_match": 42,
+        "source_overlap": 38,
+        "trajectory": 40,
+        "distance_km": 4.8,
+        "behaviour": 45,
+        "ais_consistency": 30,
+        "relevance": 50,
+        "distance_score": 52.0
+      },
+      "labels": {
+        "time_match": "Poor",
+        "source_overlap": "Low",
+        "trajectory": "Poor",
+        "behaviour": "Anomalous"
+      },
+      "attribution_score": 42,
+      "confidence": "Low",
+      "status": "Low",
+      "evidence": [
+        "Moderate proximity to inferred origin",
+        "Speed anomaly detected during release window",
+        "AIS track has gaps near the source region",
+        "Flagged by SAR-AIS consistency check (possible AIS-dark interval)"
+      ],
+      "assessment": "LOW-PRIORITY CANDIDATE",
+      "track": [
+        {
+          "time": "2026-08-15T09:30:00Z",
+          "lat": 19.63511,
+          "lon": 71.37963,
+          "speed_kt": 9.5,
+          "heading": 198.2
+        },
+        {
+          "time": "2026-08-15T09:45:00Z",
+          "lat": 19.59757,
+          "lon": 71.36653,
+          "speed_kt": 9.5,
+          "heading": 198.0
+        },
+        {
+          "time": "2026-08-15T10:00:00Z",
+          "lat": 19.55999,
+          "lon": 71.35359,
+          "speed_kt": 9.5,
+          "heading": 192.1
+        },
+        {
+          "time": "2026-08-15T10:15:00Z",
+          "lat": 19.52136,
+          "lon": 71.3448,
+          "speed_kt": 9.5,
+          "heading": 198.4
+        },
+        {
+          "time": "2026-08-15T10:30:00Z",
+          "lat": 19.48387,
+          "lon": 71.33155,
+          "speed_kt": 9.5,
+          "heading": 191.9
+        },
+        {
+          "time": "2026-08-15T10:45:00Z",
+          "lat": 19.4452,
+          "lon": 71.32293,
+          "speed_kt": 4.5,
+          "heading": 191.7
+        },
+        {
+          "time": "2026-08-15T11:00:00Z",
+          "lat": 19.42687,
+          "lon": 71.31891,
+          "speed_kt": 4.5,
+          "heading": 198.9
+        },
+        {
+          "time": "2026-08-15T11:15:00Z",
+          "lat": 19.40916,
+          "lon": 71.31248,
+          "speed_kt": 9.5,
+          "heading": 198.4
+        },
+        {
+          "time": "2026-08-15T11:30:00Z",
+          "lat": 19.37167,
+          "lon": 71.29924,
+          "speed_kt": 9.5,
+          "heading": 196.1
+        },
+        {
+          "time": "2026-08-15T11:45:00Z",
+          "lat": 19.33371,
+          "lon": 71.2876,
+          "speed_kt": 9.5,
+          "heading": 196.1
+        },
+        {
+          "time": "2026-08-15T12:00:00Z",
+          "lat": 19.29575,
+          "lon": 71.27598,
+          "speed_kt": 9.5,
+          "heading": 197.2
+        }
+      ]
+    },
+    {
+      "vessel_id": "V004",
+      "vessel_name": "MT Eastern Star",
+      "mmsi": "636091823",
+      "vessel_type": "Chemical Tanker",
+      "flag": "Marshall Islands",
+      "ais_dark": false,
+      "factors": {
+        "time_match": 40,
+        "source_overlap": 35,
+        "trajectory": 38,
+        "distance_km": 6.5,
+        "behaviour": 25,
+        "ais_consistency": 75,
+        "relevance": 45,
+        "distance_score": 35.0
+      },
+      "labels": {
+        "time_match": "Poor",
+        "source_overlap": "Low",
+        "trajectory": "Poor",
+        "behaviour": "Normal"
+      },
+      "attribution_score": 38,
+      "confidence": "Low",
+      "status": "Low",
+      "evidence": [
+        "AIS continuity acceptable"
+      ],
+      "assessment": "LOW-PRIORITY CANDIDATE",
+      "track": [
+        {
+          "time": "2026-08-15T09:30:00Z",
+          "lat": 19.7191,
+          "lon": 71.33411,
+          "speed_kt": 11.0,
+          "heading": 303.9
+        },
+        {
+          "time": "2026-08-15T09:45:00Z",
+          "lat": 19.74464,
+          "lon": 71.29379,
+          "speed_kt": 11.0,
+          "heading": 303.2
+        },
+        {
+          "time": "2026-08-15T10:00:00Z",
+          "lat": 19.7697,
+          "lon": 71.25312,
+          "speed_kt": 11.0,
+          "heading": 302.6
+        },
+        {
+          "time": "2026-08-15T10:15:00Z",
+          "lat": 19.79437,
+          "lon": 71.21217,
+          "speed_kt": 11.0,
+          "heading": 303.6
+        },
+        {
+          "time": "2026-08-15T10:30:00Z",
+          "lat": 19.81967,
+          "lon": 71.17166,
+          "speed_kt": 11.0,
+          "heading": 304.2
+        },
+        {
+          "time": "2026-08-15T10:45:00Z",
+          "lat": 19.84535,
+          "lon": 71.13141,
+          "speed_kt": 11.0,
+          "heading": 301.6
+        },
+        {
+          "time": "2026-08-15T11:00:00Z",
+          "lat": 19.86931,
+          "lon": 71.08998,
+          "speed_kt": 11.0,
+          "heading": 307.5
+        },
+        {
+          "time": "2026-08-15T11:15:00Z",
+          "lat": 19.89716,
+          "lon": 71.05139,
+          "speed_kt": 11.0,
+          "heading": 302.9
+        },
+        {
+          "time": "2026-08-15T11:30:00Z",
+          "lat": 19.92203,
+          "lon": 71.01055,
+          "speed_kt": 11.0,
+          "heading": 304.6
+        },
+        {
+          "time": "2026-08-15T11:45:00Z",
+          "lat": 19.94799,
+          "lon": 70.97048,
+          "speed_kt": 11.0,
+          "heading": 307.2
+        },
+        {
+          "time": "2026-08-15T12:00:00Z",
+          "lat": 19.97562,
+          "lon": 70.93169,
+          "speed_kt": 11.0,
+          "heading": 305.5
+        }
+      ]
+    },
+    {
+      "vessel_id": "V006",
+      "vessel_name": "MV Neptune",
+      "mmsi": "538004471",
+      "vessel_type": "Container Ship",
+      "flag": "Marshall Islands",
+      "ais_dark": false,
+      "factors": {
+        "time_match": 20,
+        "source_overlap": 15,
+        "trajectory": 18,
+        "distance_km": 11.5,
+        "behaviour": 15,
+        "ais_consistency": 70,
+        "relevance": 30,
+        "distance_score": 0.0
+      },
+      "labels": {
+        "time_match": "Poor",
+        "source_overlap": "Low",
+        "trajectory": "Poor",
+        "behaviour": "Normal"
+      },
+      "attribution_score": 18,
+      "confidence": "Low",
+      "status": "Low",
+      "evidence": [
+        "AIS continuity acceptable"
+      ],
+      "assessment": "LOW-PRIORITY CANDIDATE",
+      "track": [
+        {
+          "time": "2026-08-15T09:30:00Z",
+          "lat": 19.66379,
+          "lon": 71.27642,
+          "speed_kt": 16.0,
+          "heading": 354.9
+        },
+        {
+          "time": "2026-08-15T09:45:00Z",
+          "lat": 19.73007,
+          "lon": 71.2701,
+          "speed_kt": 16.0,
+          "heading": 352.4
+        },
+        {
+          "time": "2026-08-15T10:00:00Z",
+          "lat": 19.79604,
+          "lon": 71.26081,
+          "speed_kt": 16.0,
+          "heading": 351.7
+        },
+        {
+          "time": "2026-08-15T10:15:00Z",
+          "lat": 19.86189,
+          "lon": 71.25059,
+          "speed_kt": 16.0,
+          "heading": 354.1
+        },
+        {
+          "time": "2026-08-15T10:30:00Z",
+          "lat": 19.92809,
+          "lon": 71.24335,
+          "speed_kt": 16.0,
+          "heading": 357.9
+        },
+        {
+          "time": "2026-08-15T10:45:00Z",
+          "lat": 19.99459,
+          "lon": 71.2408,
+          "speed_kt": 16.0,
+          "heading": 356.5
+        },
+        {
+          "time": "2026-08-15T11:00:00Z",
+          "lat": 20.06101,
+          "lon": 71.23644,
+          "speed_kt": 16.0,
+          "heading": 358.2
+        },
+        {
+          "time": "2026-08-15T11:15:00Z",
+          "lat": 20.12752,
+          "lon": 71.23419,
+          "speed_kt": 16.0,
+          "heading": 358.9
+        },
+        {
+          "time": "2026-08-15T11:30:00Z",
+          "lat": 20.19405,
+          "lon": 71.23281,
+          "speed_kt": 16.0,
+          "heading": 352.2
+        },
+        {
+          "time": "2026-08-15T11:45:00Z",
+          "lat": 20.25999,
+          "lon": 71.22322,
+          "speed_kt": 16.0,
+          "heading": 358.3
+        },
+        {
+          "time": "2026-08-15T12:00:00Z",
+          "lat": 20.32651,
+          "lon": 71.22109,
+          "speed_kt": 16.0,
+          "heading": 353.5
+        }
+      ]
+    }
+  ]
+}

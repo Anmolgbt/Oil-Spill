@@ -1,0 +1,161 @@
+{
+  "incident_id": "IND-2026-001",
+  "title": "INCIDENT #IND-2026-001",
+  "region": "Arabian Sea \u2014 off the Gujarat coast, India (demo AOI)",
+  "status": "Under Investigation",
+  "data_mode": "DEMO / SYNTHETIC DATA",
+  "satellite": {
+    "sensor": "Sentinel-1 SAR",
+    "scene_id": "S1A-DEMO-20260815T140000",
+    "acquisition_date": "2026-08-15",
+    "acquisition_time": "14:00 UTC",
+    "coverage": "Arabian Sea",
+    "image_original": "/demo-images/sar_original.jpg",
+    "image_mask": "/demo-images/sar_mask.png",
+    "image_overlay": "/demo-images/sar_overlay.jpg"
+  },
+  "kpis": {
+    "spill_probability": 0.94,
+    "estimated_area_km2": 12.8,
+    "source_confidence": 0.78,
+    "potential_vessels": 6
+  },
+  "lookalike": {
+    "classes": [
+      {
+        "label": "Oil Spill",
+        "probability": 0.94
+      },
+      {
+        "label": "Biofilm",
+        "probability": 0.03
+      },
+      {
+        "label": "Low-Wind Area",
+        "probability": 0.02
+      },
+      {
+        "label": "Other Dark Feature",
+        "probability": 0.01
+      }
+    ],
+    "decision": "Oil-like signature accepted"
+  },
+  "spill_metrics": {
+    "oil_probability": 0.94,
+    "area_km2": 12.8,
+    "length_km": 7.4,
+    "width_km": 2.1,
+    "confidence": "High"
+  },
+  "source_reconstruction": {
+    "release_window_start": "2026-08-15T10:20:00Z",
+    "release_window_mid": "2026-08-15T10:45:00Z",
+    "release_window_end": "2026-08-15T11:10:00Z",
+    "confidence": 0.78,
+    "confidence_label": "High",
+    "note": "Observed spill location may differ from release location because of ocean and wind-driven drift.",
+    "drift_speed_kmh": 2.7,
+    "drift_bearing_deg": 215.5
+  },
+  "environment": {
+    "wind_from_deg": 55,
+    "wind_towards_deg": 235,
+    "wind_speed_kt": 14.0,
+    "current_towards_deg": 208,
+    "current_speed_ms": 0.55
+  },
+  "sar_ais_check": {
+    "sar_detected_vessels": 5,
+    "ais_matched_vessels": 4,
+    "inconsistent_vessels": 1,
+    "flagged_vessel_id": "V005",
+    "flagged_vessel_name": "MV Coastal Pioneer",
+    "note": "Potential AIS-dark / inconsistent vessel detected near the spill scene. This does not establish responsibility; it is flagged for manual investigation."
+  },
+  "ais_search": {
+    "search_region": "Probable source region + estimated release-time window",
+    "vessels_found": 6,
+    "message": "6 vessels found in source region."
+  },
+  "forecast": {
+    "hours": [
+      6,
+      12,
+      24,
+      36,
+      48
+    ],
+    "confidence": "Medium",
+    "at_risk_areas": [
+      {
+        "name": "Diu Coastal Belt (demo)",
+        "type": "coastline",
+        "eta_hours": 30
+      },
+      {
+        "name": "Veraval Fishing Ground (demo)",
+        "type": "fishing_zone",
+        "eta_hours": 22
+      },
+      {
+        "name": "Gulf of Kutch Marine Sanctuary (demo)",
+        "type": "protected_area",
+        "eta_hours": 46
+      }
+    ]
+  },
+  "replay_events": [
+    {
+      "time": "10:00",
+      "label": "Vessel enters source region",
+      "detail": "MV Ocean Crest enters the probable source region on a routine transit heading."
+    },
+    {
+      "time": "10:20",
+      "label": "Release window opens",
+      "detail": "Backward hindcast places the start of the plausible release window here."
+    },
+    {
+      "time": "10:30",
+      "label": "Speed anomaly begins",
+      "detail": "MV Ocean Crest slows from ~12.5 kt to ~3 kt \u2014 consistent with a discharge event."
+    },
+    {
+      "time": "10:45",
+      "label": "Probable release (mid-window)",
+      "detail": "Midpoint of the estimated release-time window used for the drift model."
+    },
+    {
+      "time": "11:00",
+      "label": "Speed resumes",
+      "detail": "MV Ocean Crest returns to transit speed and continues on course."
+    },
+    {
+      "time": "11:10",
+      "label": "Release window closes",
+      "detail": "End of the estimated release-time window from the hindcast ensemble."
+    },
+    {
+      "time": "11:30",
+      "label": "Slick drifting",
+      "detail": "Wind and current begin advecting the slick south-west, away from the source."
+    },
+    {
+      "time": "14:00",
+      "label": "Satellite observes slick",
+      "detail": "Sentinel-1 SAR acquisition captures the slick at its observed location, ~9 km from the source."
+    }
+  ],
+  "slider_times": [
+    "10:00",
+    "10:15",
+    "10:30",
+    "10:45",
+    "11:00",
+    "11:15",
+    "11:30"
+  ],
+  "top_candidate_id": "V001",
+  "disclaimer": "Attribution score is an investigation aid, not a legal determination of responsibility."
+}
