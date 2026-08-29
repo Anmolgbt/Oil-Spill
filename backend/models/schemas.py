@@ -15,3 +15,7 @@ class ForecastRequest(BaseModel):
 
 class AttributeRequest(BaseModel):
     vessel_id: str
+
+
+class SimulationRequest(BaseModel):
+    snapshot_id: Optional[str] = None

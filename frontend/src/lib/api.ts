@@ -1,4 +1,7 @@
-const API="http://localhost:8000";
+export const API="http://localhost:8000";
+// Backend-served paths (e.g. /simulation-images/...) need the API origin when
+// the page itself is served by the Vite dev server on another port.
+export const apiUrl=(path?:string|null)=>path?`${API}${path}`:undefined;
 async function request(path:string, options?:RequestInit){
   try{const c=new AbortController();const t=setTimeout(()=>c.abort(),1500);const r=await fetch(API+path,{...options,signal:c.signal,headers:{"Content-Type":"application/json",...(options?.headers||{})}});clearTimeout(t);if(!r.ok)throw new Error("API");return await r.json();}
   catch{return null;}
@@ -14,3 +17,8 @@ export async function attribute(id:string){return (await request("/attribute",{m
 export async function forecast(){return (await request("/forecast",{method:"POST",body:JSON.stringify({hours:[6,12,24,36,48]})})) || {polygons:(await local("forecast_polygons.geojson")).features,confidence:"Medium",at_risk_areas:(await getIncident()).forecast.at_risk_areas}}
 export async function report(){return (await request("/report/IND-2026-001")) || {incident:await getIncident(),top_candidates:(await local("vessels.json")).vessels.slice(0,3),disclaimer:(await getIncident()).disclaimer}}
 export async function geo(name:string){return local(name)}
+
+// Spill-first pipeline. Returns null when the backend is unreachable so the
+// caller can fall back to the legacy sequential flow (and its static fixtures).
+export async function simulate(snapshotId?:string){return await request("/simulate",{method:"POST",body:JSON.stringify(snapshotId?{snapshot_id:snapshotId}:{})})}
+export async function snapshotList(){return (await request("/snapshots")) || null}

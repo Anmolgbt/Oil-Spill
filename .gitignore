@@ -5,3 +5,7 @@ node_modules/
 dist/
 .env
 .DS_Store
+backend/data/runtime/*
+!backend/data/runtime/.gitkeep
+!backend/data/runtime/README.md
+tsconfig.tsbuildinfo
