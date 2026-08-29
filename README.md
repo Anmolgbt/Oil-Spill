@@ -5,6 +5,7 @@ Smart India Hackathon 2026 — hackathon MVP.
 
 > **DEMO / SYNTHETIC DATA:** This build contains no real vessel, company, or spill event.
 
+
 ## Core story
 
 **SATELLITE → SPILL → BACKTRACK → SOURCE + TIME → AIS → CANDIDATES → EVIDENCE SCORE → FORECAST → REPORT**
