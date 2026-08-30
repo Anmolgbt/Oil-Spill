@@ -1,57 +1,32 @@
 """
-Central configuration and filesystem paths.
+Filesystem paths and shared constants.
 
-DEMO_MODE is the single switch between the bundled demo fixtures and the real
-computation that will replace them:
-
-    DEMO_MODE=1 (default) -> services read backend/data/demo/ fixtures
-    DEMO_MODE=0           -> services raise NotImplementedError until the real
-                             ML / drift / AIS implementations are connected
-
-Nothing here imports the rest of the app, so any module may import it safely.
+Every path is resolved from this file's own location, so the app runs correctly
+regardless of the working directory uvicorn was started from. Nothing here
+imports the rest of the app, so any module may import it safely.
 """
-import os
 from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
 DATA_DIR = BACKEND_DIR / "data"
-DEMO_DATA_DIR = DATA_DIR / "demo"          # frozen synthetic fixtures
-SIMULATION_DIR = DATA_DIR / "simulation"   # snapshot simulation (future ML input)
-RUNTIME_DIR = DATA_DIR / "runtime"         # computed results, written at run time
-IMAGES_DIR = DATA_DIR / "images"           # served at /demo-images
 
+# Monitored fleet: fleet.json plus the satellite passes under snapshots/.
+# Served to the browser at /simulation-images.
+SIMULATION_DIR = DATA_DIR / "simulation"
 
-def _flag(name, default="1"):
-    return os.getenv(name, default).strip().lower() in ("1", "true", "yes", "on")
+# Completed AI result from the Colab handoff, used as the dashboard's fallback
+# when a live scan is unavailable. Its samples/ folder is served at /ai-images.
+AI_OUTPUT_DIR = DATA_DIR / "ai_output"
 
+# AIS corpus the Isolation Forest was trained and scored on. Required at runtime:
+# the notebook normalises anomaly scores against dataset-wide min/max, so a single
+# vessel cannot be scored on the same 0-100 scale without it.
+AIS_REFERENCE_FILE = DATA_DIR / "ais_reference" / "ais_dataset.csv"
 
-DEMO_MODE = _flag("DEMO_MODE")
+# Trained model files.
+MODEL_ARTIFACTS_DIR = BACKEND_DIR / "artifacts"
 
-# Set when trained models are available; read by the adapters in ml/.
-SPILL_MODEL_PATH = os.getenv("SPILL_MODEL_PATH")
-ANOMALY_MODEL_PATH = os.getenv("ANOMALY_MODEL_PATH")
-
-
-def model_provenance(model_path):
-    """
-    Where a model-backed result actually came from.
-
-    Lets a caller tell a real inference apart from a demo placeholder without
-    inspecting the value itself:
-
-        {"source": "demo_stub", "model_version": None}
-        {"source": "ml_model",  "model_version": "oil_detector_v1.pt"}
-    """
-    if DEMO_MODE or not model_path:
-        return {"source": "demo_stub", "model_version": None}
-    return {"source": "ml_model", "model_version": Path(model_path).name}
-
-
-# Results read straight from a bundled fixture, with no model behind them and
-# none planned for now.
-FIXTURE_PROVENANCE = {"source": "demo_fixture", "model_version": None}
-
-# Results this backend genuinely computes in both modes (drift, AIS geometry,
-# the weighted score) — neither a model nor a fixture.
+# Marks a value this backend calculates itself — drift geometry, AIS distances,
+# the weighted score — as opposed to one a trained model produced.
 COMPUTED_PROVENANCE = {"source": "computed", "model_version": None}
