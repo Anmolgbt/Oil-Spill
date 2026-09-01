@@ -42,30 +42,6 @@
    "ship_id": "ship6",
    "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/t0_ship3.jpg",
    "ground_truth_for_simulation": "no_oil"
-  },
-  {
-   "snapshot_id": "t3",
-   "ship_id": "ship7",
-   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/t2_ship2.jpg",
-   "ground_truth_for_simulation": "no_oil"
-  },
-  {
-   "snapshot_id": "t3",
-   "ship_id": "ship8",
-   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/class_0.jpg",
-   "ground_truth_for_simulation": "no_oil"
-  },
-  {
-   "snapshot_id": "t3",
-   "ship_id": "ship9",
-   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/class_0.jpg",
-   "ground_truth_for_simulation": "no_oil"
-  },
-  {
-   "snapshot_id": "t3",
-   "ship_id": "ship10",
-   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/t0_ship3.jpg",
-   "ground_truth_for_simulation": "no_oil"
   }
  ]
 }

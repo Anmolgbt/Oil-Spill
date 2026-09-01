@@ -48,7 +48,10 @@ from services.t3_simulation import CLEAN_POOL_DIR, write_t3_snapshot
 FLEET_FILE = SIMULATION_DIR / "fleet.json"
 SNAPSHOTS_DIR = SIMULATION_DIR / "snapshots"
 
-FLEET_SIZE = 10
+# Keep the monitored roster to vessels that the source corpus identifies by
+# name. The four anonymous records previously shown as "VESSEL <MMSI>" are
+# intentionally omitted from the walkthrough.
+FLEET_SIZE = 6
 # A real, historically busy patch of Gulf traffic. This is only used to pick a
 # CLUSTER out of the corpus — the vessels' own recorded coordinates, speed and
 # course are what gets used everywhere downstream.
@@ -91,6 +94,10 @@ EXCLUDE_MMSI = {
     369093000,   # KOLT LEVI — the track-quality filter also rejects it (it ran
                  # 194 km to net 38 km), but the exclusion is explicit so the
                  # removal holds if those thresholds are ever retuned.
+    636019218,   # unnamed in the corpus (displayed as VESSEL 636019218)
+    219025316,   # unnamed in the corpus (displayed as VESSEL 219025316)
+    636018579,   # unnamed in the corpus (displayed as VESSEL 636018579)
+    477430900,   # unnamed in the corpus (displayed as VESSEL 477430900)
 }
 
 # CROSSING and MOVING-AWAY vessels must start outside the obstacle the reroute
