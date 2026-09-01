@@ -1,14 +1,30 @@
-fastapi==0.115.0
-uvicorn[standard]==0.30.6
-pydantic==2.9.2
-python-multipart==0.0.9
-numpy==2.5.2
-Pillow==10.4.0
-# Live CNN inference (ml/cnn_inference.py). CPU wheels are sufficient.
-torch==2.13.0
-torchvision==0.28.0
-# Live AIS inference (ml/ais_inference.py). scikit-learn is pinned to the
-# version the .pkl artifacts were created with (1.6.1) so they unpickle cleanly.
+# OILTRACE backend dependencies.
+#
+# Versions are floors, not exact pins, so the project installs on Python 3.10
+# through 3.13. The one exception is scikit-learn — see the note below.
+
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pydantic>=2.9
+python-multipart>=0.0.9
+Pillow>=10.4
+
+# Live CNN inference (backend/ml/cnn_inference.py). CPU wheels are sufficient;
+# the model never needs a GPU.
+torch>=2.2
+torchvision>=0.17
+
+# Numerics. numpy 2.5+ requires Python 3.12, so the floor stays lower to keep
+# 3.10/3.11 working; the upper bound guards against a future 3.x ABI break.
+numpy>=1.26,<3
+pandas>=2.2
+
+# Live AIS inference (backend/ml/ais_inference.py).
+#
+# scikit-learn is pinned EXACTLY and must stay that way: the bundled
+# artifacts/ais_isolation_forest.pkl and ais_scaler.pkl were created with 1.6.1.
+# Loading them under a different version emits "may lead to breaking code or
+# invalid results" and is not safe to rely on. Changing this pin means
+# re-exporting the models.
 scikit-learn==1.6.1
-joblib==1.5.3
-pandas==3.0.5
+joblib>=1.3
