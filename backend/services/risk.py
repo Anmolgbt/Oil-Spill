@@ -110,6 +110,18 @@ def project_track(ship, horizon_hours, sample_minutes=SAMPLE_MINUTES):
     return points
 
 
+def projected_route(ship, horizon_hours=RISK_FORECAST_HOURS):
+    """
+    Where this vessel is headed next, as a two-point line: its current fix and
+    where holding the present course and speed puts it at `horizon_hours`.
+
+    Produced for EVERY monitored vessel, not just flagged ones, so the map can
+    always show where a vessel is going alongside where it has been.
+    """
+    track = project_track(ship, horizon_hours)
+    return [{"latitude": lat, "longitude": lon} for _, lat, lon in (track[0], track[-1])]
+
+
 def assess_vessel(ship, polygons, horizon_hours=RISK_FORECAST_HOURS):
     """
     Does this vessel's projected track enter any of the spill's polygons?
@@ -168,10 +180,18 @@ def assess_fleet(fleet, spill_entry, horizon_hours=RISK_FORECAST_HOURS):
 
     `fleet` is the scanned ship list (current position/speed/course per
     vessel); `spill_entry` is one entry from run_fleet_scan()'s `spills` list.
+
+    Vessels the CNN flagged as showing oil are NOT assessed or rerouted. They
+    are the casualty, not traffic to divert around it: telling a vessel that is
+    itself leaking to steer clear of its own slick is meaningless, and it is a
+    response/attribution case instead. They are reported under `source_ship_ids`.
     """
     polygons = spill_polygons(spill_entry, max_hours_ahead=horizon_hours)
-    at_risk, safe_ids = [], []
+    at_risk, safe_ids, source_ids = [], [], []
     for ship in fleet:
+        if ship.get("oil_detected"):
+            source_ids.append(ship["id"])
+            continue
         result = assess_vessel(ship, polygons, horizon_hours)
         if result:
             at_risk.append(result)
@@ -181,15 +201,16 @@ def assess_fleet(fleet, spill_entry, horizon_hours=RISK_FORECAST_HOURS):
     at_risk.sort(key=lambda r: r["estimated_entry_minutes"])
     return {
         "forecast_horizon_hours": horizon_hours,
-        "vessels_checked": len(fleet),
+        "vessels_checked": len(fleet) - len(source_ids),
         "at_risk_count": len(at_risk),
         "safe_count": len(safe_ids),
         "at_risk": at_risk,
         "safe_ship_ids": safe_ids,
+        "source_ship_ids": source_ids,
         "polygon_count": len(polygons),
         "method": ("Each vessel's current AIS fix projected forward at constant "
                    "speed/course, tested against the spill's current drift "
                    "envelope and forward forecast circles within the same "
-                   "horizon."),
+                   "horizon. Vessels showing oil themselves are excluded."),
         "label": "FORWARD RISK — SIMULATED PROJECTION",
     }

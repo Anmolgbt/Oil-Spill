@@ -1,5 +1,5 @@
 import {useEffect, useMemo, useState} from "react";
-import {CircleMarker, MapContainer, Polygon, Polyline, TileLayer, Tooltip, useMap} from "react-leaflet";
+import {CircleMarker, MapContainer, Marker, Polygon, Polyline, TileLayer, Tooltip, useMap} from "react-leaflet";
 import L from "leaflet";
 import {AlertTriangle, Anchor, Check, ExternalLink, FileText, Info, X} from "lucide-react";
 import {NOT_AVAILABLE, fleetViewport, getInvestigation, runFleetScan, show, showCoord, showPct} from "./lib/oiltrace";
@@ -27,6 +27,21 @@ const ring = (lat: number, lon: number, km: number): [number, number][] => {
     return [lat + dLat * Math.cos(a), lon + dLon * Math.sin(a)] as [number, number];
   });
 };
+
+/** Green "+" pin for a simulated skimmer station; filled when it's the one
+ *  recommended for the spill currently in view. */
+const skimmerIcon = (recommended: boolean) =>
+  L.divIcon({
+    className: "",
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
+    html:
+      `<div style="width:22px;height:22px;border-radius:5px;display:flex;` +
+      `align-items:center;justify-content:center;font:700 17px/1 system-ui;` +
+      `color:${recommended ? "#fff" : "#1a8a4a"};` +
+      `background:${recommended ? "#1a8a4a" : "rgba(255,255,255,.92)"};` +
+      `border:2px solid #1a8a4a;box-shadow:0 1px 3px rgba(0,0,0,.3)">+</div>`,
+  });
 
 function Card({children, className = ""}: {children: any; className?: string}) {
   return <section className={"card " + className}>{children}</section>;
@@ -63,7 +78,7 @@ function MapFit({points}: {points: [number, number][] | null}) {
  */
 function MapView({view, envelope, detected, shownSpill, shownArea, shownSource, source,
                    shownForecast, selectedRisk, selected, setSelected, fleet, riskByShipId,
-                   legendOpen, setLegendOpen, mapStyle}: any) {
+                   legendOpen, setLegendOpen, mapStyle, skimmers, recommendedSkimmerId}: any) {
   return (
     <MapContainer center={view?.center ?? FALLBACK_CENTER} zoom={7} className="map" style={mapStyle} scrollWheelZoom>
       <MapFit points={view?.points ?? null} />
@@ -131,9 +146,31 @@ function MapView({view, envelope, detected, shownSpill, shownArea, shownSource, 
       {selected?.track?.length > 1 && (
         <Polyline positions={selected.track.map((p: any) => [p.lat, p.lon] as [number, number])}
                   pathOptions={{color: "#8a95a3", weight: 2.5, opacity: .8}}>
-          <Tooltip>{selected.name} · AIS track</Tooltip>
+          <Tooltip>{selected.name} · AIS track (where it has been)</Tooltip>
         </Polyline>
       )}
+
+      {/* Where the selected vessel is HEADED — shown for every vessel, so a
+          click always pairs the grey past track with a blue future one.
+          An at-risk vessel's own projection is drawn in red further up. */}
+      {selected?.projected_track?.length > 1 && !selectedRisk && (
+        <Polyline
+          positions={selected.projected_track.map((p: any) => [p.latitude, p.longitude] as [number, number])}
+          pathOptions={{color: "#0b5cab", weight: 2.5, dashArray: "7 5", opacity: .9}}>
+          <Tooltip>{selected.name} · projected track (where it is going)<br />
+            Kinematic projection at {fmt(selected.speed_kt)} kt · {fmt(selected.course_deg, 0)}°</Tooltip>
+        </Polyline>
+      )}
+
+      {/* Simulated skimmer stations. Green + marks a response asset. */}
+      {(skimmers || []).map((s: any) => (
+        <Marker key={s.id} position={[s.latitude, s.longitude]} icon={skimmerIcon(s.id === recommendedSkimmerId)}>
+          <Tooltip>
+            <b>{s.name}</b><br />Simulated response asset
+            {s.id === recommendedSkimmerId && <><br /><b>NEAREST TO THIS SPILL</b></>}
+          </Tooltip>
+        </Marker>
+      ))}
 
       {/* monitored vessels — an amber ring marks a vessel FORWARD RISK
           flagged as projected to enter the spill area (separate from
@@ -173,6 +210,8 @@ function MapView({view, envelope, detected, shownSpill, shownArea, shownSource, 
         {detected && <span><i style={{width: 18, height: 0, borderTop: "1px dashed #c0261b"}} />Possible affected area</span>}
         {detected && <span><i style={{width: 10, height: 10, borderRadius: "50%", border: "2px dashed #b8860b", display: "inline-block"}} />Vessel at risk (forward projection)</span>}
         {detected && <span><i style={{width: 18, height: 0, borderTop: "3px dashed #1a8a4a"}} />Simulated detour (demo only)</span>}
+        <span><i style={{width: 18, height: 0, borderTop: "2px dashed #0b5cab"}} />Selected vessel's projected track</span>
+        <span><i style={{width: 12, height: 12, borderRadius: 3, border: "2px solid #1a8a4a", background: "#1a8a4a", display: "inline-block"}} />Skimmer station (simulated)</span>
       </div>}
       <button className={"legendbtn" + (legendOpen ? " open" : "")}
               onClick={() => setLegendOpen((v: boolean) => !v)}
@@ -294,6 +333,14 @@ function App() {
   );
   const selectedRisk = selected ? riskByShipId[selected.id] : undefined;
 
+  // RESPONSE — simulated skimmer assets, and which one reaches the spill
+  // currently in view fastest. Stations show on every pass; the recommendation
+  // only exists once there is a spill to respond to.
+  const skimmers = scan?.skimmers || [];
+  const shownResponse = shown?.response;
+  const recommendedSkimmerId = shownResponse?.recommended?.skimmer_id;
+  const shownDamage = shown?.damage;
+
   if (!scan && !error) return <div className="loading">Loading OILTRACE…</div>;
   if (error) return <div className="loading">{error}</div>;
 
@@ -320,6 +367,7 @@ function App() {
                     shownForecast={shownForecast} selectedRisk={selectedRisk} selected={selected}
                     setSelected={setSelected} fleet={fleet} riskByShipId={riskByShipId}
                     legendOpen={legendOpen} setLegendOpen={setLegendOpen}
+                    skimmers={skimmers} recommendedSkimmerId={recommendedSkimmerId}
                     mapStyle={{height: "100%", width: "100%"}} />
         </div>
       </div>
@@ -452,15 +500,27 @@ function App() {
                     shownArea={shownArea} shownSource={shownSource} source={source}
                     shownForecast={shownForecast} selectedRisk={selectedRisk} selected={selected}
                     setSelected={setSelected} fleet={fleet} riskByShipId={riskByShipId}
-                    legendOpen={legendOpen} setLegendOpen={setLegendOpen} />
+                    legendOpen={legendOpen} setLegendOpen={setLegendOpen}
+                    skimmers={skimmers} recommendedSkimmerId={recommendedSkimmerId} />
 
           <div className="mapbottom">
+            {/* Assumed conditions, labelled as such. These now drive the impact
+                envelope, so showing them beats showing "Not available". */}
             <div className="env">
               <Info size={14} />
-              <span>WIND <b>{NOT_AVAILABLE}</b></span>
-              <span>CURRENT <b>{NOT_AVAILABLE}</b></span>
+              <span>WIND <b>{scan.environment?.wind
+                ? `${fmt(scan.environment.wind.speed_ms)} m/s · ${fmt(scan.environment.wind.direction_deg, 0)}°`
+                : NOT_AVAILABLE}</b></span>
+              <span>CURRENT <b>{scan.environment?.current
+                ? `${fmt(scan.environment.current.speed_ms, 2)} m/s · ${fmt(scan.environment.current.direction_deg, 0)}°`
+                : NOT_AVAILABLE}</b></span>
               <span>WAVE <b>{NOT_AVAILABLE}</b></span>
-              <span style={{marginLeft: "auto"}}>Drift uses a fixed assumed vector — no environmental data.</span>
+              <span>DRIFT <b>{scan.environment?.drift
+                ? `${fmt(scan.environment.drift.speed_kmh, 2)} km/h · ${fmt(scan.environment.drift.direction_deg, 0)}°`
+                : NOT_AVAILABLE}</b></span>
+              <span style={{marginLeft: "auto"}}>
+                Wind and current are <b>assumed values</b>, not measurements — no met-ocean feed is connected.
+              </span>
             </div>
           </div>
         </section>
@@ -528,7 +588,18 @@ function App() {
                     </div>
                     <div className="metrics">
                       <div><small>Probable source</small><b>{showCoord(sel.source?.latitude, 3)}, {showCoord(sel.source?.longitude, 3)}</b></div>
-                      <div><small>Search zone</small><b>{fmt(sel.affected_area?.radius_km)} km · {fmt(sel.affected_area?.area_km2, 0)} km²</b></div>
+                      <div><small>Impact envelope</small><b>{fmt(sel.affected_area?.radius_km)} km · {fmt(sel.affected_area?.area_km2, 0)} km²</b></div>
+                    </div>
+                    <div className="metrics">
+                      <div><small>Response priority</small>
+                        <b style={{color: "var(--danger)"}}>
+                          {sel.response_priority ?? NOT_AVAILABLE}
+                          {sel.damage ? ` · ${fmt(sel.damage.priority_score)}/100` : ""}
+                        </b></div>
+                      <div><small>Nearest skimmer</small>
+                        <b>{sel.response?.recommended
+                            ? `${sel.response.recommended.name} · ${sel.response.recommended.eta_minutes} min`
+                            : NOT_AVAILABLE}</b></div>
                     </div>
                     <div className="metrics">
                       <div style={{gridColumn: "1 / 3"}}>
@@ -642,6 +713,54 @@ function App() {
           <div className="subtle" style={{marginTop: 6, fontSize: 12}}>
             Kinematic projection from each vessel's current speed/heading — a prototype trajectory, not a
             navigational prediction. Detour headings are a SIMULATED ROUTE AVOIDANCE demo, not maritime guidance.
+          </div>
+        </div>
+      )}
+
+      {/* ---------------- response: which spill first, and who goes ---------------- */}
+      {detected && (scan.response_priorities || []).length > 0 && (
+        <div className="oilstrip">
+          <div className="eyebrow">
+            RESPONSE PRIORITY <Badge tone="amber">SIMULATED DISPATCH</Badge>
+            <span style={{marginLeft: "auto", textTransform: "none", letterSpacing: 0}}>
+              {scan.response_priorities.length} live spill{scan.response_priorities.length === 1 ? "" : "s"}
+            </span>
+          </div>
+          <div className="oilhead">
+            <span>#</span><span>Spill</span><span>Impact envelope</span>
+            <span>Nearest skimmer</span><span>Priority</span>
+          </div>
+          {scan.response_priorities.map((p: any) => {
+            const entry = (scan.spills || []).find((sp: any) => sp.spill?.ship_id === p.ship_id);
+            const best = entry?.response?.recommended;
+            return (
+              <button key={p.ship_id}
+                      className={"oilrank " + (selected?.id === p.ship_id ? "selected" : "")}
+                      onClick={() => setSelected(fleet.find((f: any) => f.id === p.ship_id))}>
+                <span className="pos">
+                  {p.response_priority}
+                  <i className="dot" style={{background: "#c0261b"}} />
+                </span>
+                <span className="vessel">
+                  <b>{p.ship_name}</b>
+                  <small>MMSI {p.mmsi}</small>
+                </span>
+                <span className="meta">
+                  {fmt(p.envelope_radius_km)} km radius · {fmt(p.envelope_area_km2, 0)} km²
+                </span>
+                <span className="sus">
+                  {best
+                    ? <>{best.name} · <b>{best.eta_minutes} min</b> · {fmt(best.distance_km)} km</>
+                    : "No asset assigned"}
+                </span>
+                <span className="pct">{fmt(p.priority_score)}</span>
+              </button>
+            );
+          })}
+          <div className="subtle" style={{marginTop: 6, fontSize: 12}}>
+            Priority score ranks spills against each other for response order — it is not a measure of harm
+            caused, oil volume or cost, and excludes shoreline proximity and habitat sensitivity. Skimmer
+            stations are fictional demo assets; ETA is straight-line transit with no routing or sea state.
           </div>
         </div>
       )}

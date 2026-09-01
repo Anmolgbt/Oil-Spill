@@ -22,7 +22,9 @@ import json
 import time
 from datetime import timedelta
 
-from core.config import COMPUTED_PROVENANCE, SIMULATION_DIR
+from core.config import (ASSUMED_CURRENT_DIRECTION_DEG, ASSUMED_CURRENT_SPEED_MS,
+                         ASSUMED_WIND_DIRECTION_DEG, ASSUMED_WIND_SPEED_MS,
+                         COMPUTED_PROVENANCE, SIMULATION_DIR)
 
 from .geo import haversine_km, parse_time
 from .investigation import (HINDCAST_DRIFT_DIRECTION_DEG, HINDCAST_DRIFT_SPEED_KMH,
@@ -30,8 +32,10 @@ from .investigation import (HINDCAST_DRIFT_DIRECTION_DEG, HINDCAST_DRIFT_SPEED_K
                             SEARCH_TIME_BEFORE_HOURS, TRAJECTORY_AFTER_HOURS,
                             TRAJECTORY_BEFORE_HOURS, WEIGHT_BEHAVIOUR,
                             WEIGHT_PROXIMITY, WEIGHT_TRAJECTORY, forecast)
-from .risk import assess_fleet, spill_polygons
+from .damage import drift_vector, impact_envelope, priority_score, rank_spills
+from .risk import assess_fleet, projected_route, spill_polygons
 from .reroute import suggest_detour
+from .skimmers import dispatch_for, stations as skimmer_stations
 from .snapshots import get_available_snapshots, get_latest_snapshot
 
 FLEET_FILE = SIMULATION_DIR / "fleet.json"
@@ -101,6 +105,7 @@ def scan_fleet(snapshot_id=None):
         record = {
             "id": ship["id"], "mmsi": ship["mmsi"], "name": ship["name"],
             "vessel_type": ship["vessel_type"], "image_url": image_url,
+            "length_m": ship.get("length_m"), "width_m": ship.get("width_m"),
             "latitude": fix["lat"] if fix else ship["latitude"],
             "longitude": fix["lon"] if fix else ship["longitude"],
             "speed_kt": fix["speed_kt"] if fix else ship["speed_kt"],
@@ -108,6 +113,9 @@ def scan_fleet(snapshot_id=None):
             "position_time": fix["time"] if fix else None,
             "track": ship.get("track", []),
         }
+        # Where this vessel is headed next, for every vessel — the map pairs it
+        # with the historic track so a click always shows past AND future.
+        record["projected_track"] = projected_route(record)
 
         if not image_url:
             record.update({"status": "NO IMAGE", "oil_detected": False,
@@ -252,27 +260,14 @@ def rank_fleet(ships, source, release_at, radius_km=MAX_DISTANCE_KM):
 
 def _affected_area(hours):
     """
-    Drift envelope over the revisit window. Not a measured slick.
+    The sea area the oil could have reached over the revisit window.
 
-    `area_km2` is the area of that envelope circle - the sea area the oil could
-    have reached. It is a real, computed figure, but it describes a SEARCH ZONE,
-    not the size of the slick. The slick's own area is unknowable here: the
-    detector classifies, it does not segment, so `measured_area_km2` stays None.
+    Sized by services/damage.py from the assumed current + windage rather than a
+    single hardcoded drift constant, so stated conditions drive the envelope.
+    Still a SEARCH/RESPONSE ZONE, never a measured slick: the detector
+    classifies and does not segment, so `measured_area_km2` stays None.
     """
-    import math
-
-    radius = HINDCAST_DRIFT_SPEED_KMH * hours
-    return {
-        "type": "drift_envelope",
-        "radius_km": round(radius, 2),
-        "area_km2": round(math.pi * radius ** 2, 1),
-        "label": "Possible affected area — drift envelope",
-        "basis": f"{HINDCAST_DRIFT_SPEED_KMH} km/h assumed drift over {hours} h",
-        "is_measured_slick_area": False,
-        "note": ("Not a measured slick boundary. The detector is a classifier and "
-                 "produces no mask, so no true spill area exists."),
-        "measured_area_km2": None,
-    }
+    return impact_envelope(hours)
 
 
 def run_fleet_scan(snapshot_id=None):
@@ -301,7 +296,18 @@ def run_fleet_scan(snapshot_id=None):
         "region": scan["region"], "synthetic_fleet": scan["synthetic_fleet"],
         "fleet": scan["ships"], "scanned": scan["scanned"],
         "detections": scan["detections"], "provenance": provenance,
-        "environment": {"wind": None, "current": None, "wave": None},
+        # Stated assumptions, not observations — no met-ocean feed is wired up.
+        # Wave is still genuinely absent: nothing in the pipeline uses it.
+        "environment": {
+            "measured": False,
+            "wind": {"speed_ms": ASSUMED_WIND_SPEED_MS,
+                     "direction_deg": ASSUMED_WIND_DIRECTION_DEG, "assumed": True},
+            "current": {"speed_ms": ASSUMED_CURRENT_SPEED_MS,
+                        "direction_deg": ASSUMED_CURRENT_DIRECTION_DEG, "assumed": True},
+            "wave": None,
+            "drift": drift_vector(),
+        },
+        "skimmers": skimmer_stations(),
     }
 
     if not scan["oil_detected"]:
@@ -361,7 +367,23 @@ def run_fleet_scan(snapshot_id=None):
             entry["detour"] = detour
         spill_entry["risk"] = risk
 
+        # RESPONSE — how bad is this one relative to the others, and who goes.
+        # Vessel size comes from the source vessel's own recorded AIS dimensions.
+        spill_entry["damage"] = priority_score(
+            spill_entry["affected_area"], det["confidence"], det.get("length_m"))
+        spill_entry["response"] = dispatch_for(
+            det_spill["latitude"], det_spill["longitude"])
+
         spills.append(spill_entry)
+
+    # Worst-first ordering across all live spills, so responders get a queue
+    # rather than a pile. Separate from the suspect ranking, which is about who
+    # caused a spill, not which spill to work first.
+    priorities = rank_spills(spills)
+    priority_by_ship = {p["ship_id"]: p for p in priorities}
+    for entry in spills:
+        entry["response_priority"] = priority_by_ship.get(
+            entry["spill"]["ship_id"], {}).get("response_priority")
 
     # The strongest detection also fills the top-level fields.
     primary = spills[0]
@@ -386,6 +408,9 @@ def run_fleet_scan(snapshot_id=None):
         "forecast": fc,
         "top_suspect": candidates[0] if candidates else None,
         "risk": risk,
+        "damage": primary["damage"],
+        "response": primary["response"],
+        "response_priorities": priorities,
         "interpretation": {
             "vessel_causation_proven": False,
             "forecast_type": "kinematic_projection",

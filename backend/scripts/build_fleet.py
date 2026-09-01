@@ -37,8 +37,10 @@ import pandas as pd
 BACKEND = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND))
 
-from core.config import AIS_REFERENCE_FILE, SIMULATION_DIR, SIMULATION_SEED
-from services.geo import angle_diff, bearing_deg, haversine_km
+from core.config import (AIS_REFERENCE_FILE, RISK_FORECAST_HOURS, SIMULATION_DIR,
+                         SIMULATION_SEED)
+from services.damage import impact_envelope
+from services.geo import angle_diff, bearing_deg, destination, haversine_km
 from services.t3_simulation import CLEAN_POOL_DIR, write_t3_snapshot
 
 FLEET_FILE = SIMULATION_DIR / "fleet.json"
@@ -55,21 +57,28 @@ MIN_TRACK_POINTS = 30
 MIN_TRACK_RANGE_KM = 1.5   # excludes vessels that barely moved (e.g. moored)
 
 # The fleet is deliberately NOT one tight huddle: a huddle puts every vessel
-# inside the spill's own drift envelope by construction, so nothing ever reads
-# as "safe". Instead the cluster is split by each vessel's own recorded
-# position and heading (real values, nothing invented):
+# inside the spill's own impact envelope by construction, so nothing ever reads
+# as "safe". The cluster is split using each vessel's own recorded end-of-
+# session position, course and speed (real values, nothing invented):
 #   NEAR         within NEAR_KM of the centre — where an oil-positive tile is
-#                most demo-plausible, and immediate neighbours of a spill.
-#   CROSSING     farther out, but the vessel's own last recorded course
-#                already points back toward the centre — a real vessel that
-#                would plausibly transit through the area.
-#   MOVING AWAY  farther out and heading away — vessels that stay clearly
-#                safe, for contrast.
+#                most demo-plausible, and the immediate neighbours of a spill.
+#   CROSSING     starts in clear water, but projecting its own recorded course
+#                and speed forward runs it into the zone.
+#   MOVING AWAY  starts clear and never comes near the zone at all.
 NEAR_KM = 15
 NEAR_COUNT = 3
-CROSS_ANGLE_DEG = 55     # heading within this many degrees of "toward centre"
 CROSS_COUNT = 4
-AWAY_ANGLE_DEG = 125     # heading within this many degrees of "away from centre"
+
+# CROSSING and MOVING-AWAY vessels must start beyond the spill's own impact
+# envelope, or they are inside it from the first frame and there is no approach
+# to show. The envelope is now sized by services/damage.py from the assumed
+# drift (a few km over one revisit), so 18 km leaves clear water between a
+# vessel and the zone. That standoff is easily covered inside the risk horizon —
+# 6 h at 10 kt is over 100 km of travel — so a vessel heading that way still
+# crosses, which is exactly the approach-and-turn the demo needs to show.
+# (This corpus is spatially concentrated: essentially nothing sits beyond 40 km
+# of the centre, so pushing this much higher starves the CROSSING bucket.)
+FAR_MIN_KM = 18
 
 MAX_SEGMENT_GAP_HOURS = 3   # splits a vessel's history into contiguous sessions
 MAX_TRACK_POINTS = 80       # downsample cap per vessel, so the file stays small
@@ -117,51 +126,135 @@ def _downsample(rows, cap):
     return [rows[i] for i in indices]
 
 
+def vessel_profile(corpus):
+    """
+    One row per vessel describing the state the demo will actually plot: the
+    LAST fix of the contiguous session build_ship_track() keeps, not the mean of
+    the vessel's whole multi-month history. Selecting on the mean was wrong —
+    a vessel whose average position is 18 km out can finish its session right
+    next to the cluster centre, which is how "far" vessels ended up inside the
+    spill zone on the map.
+    """
+    rows = []
+    for mmsi, vessel in corpus.groupby("MMSI"):
+        vessel = vessel.sort_values("BaseDateTime").reset_index(drop=True)
+        start, end = _longest_contiguous_segment(list(vessel["BaseDateTime"]))
+        segment = vessel.iloc[start:end]
+        if len(segment) < MIN_TRACK_POINTS:
+            continue
+        final = segment.iloc[-1]
+        first = vessel.iloc[0]
+        rows.append({
+            "MMSI": mmsi,
+            "n": len(segment),
+            "lat": float(final["LAT"]), "lon": float(final["LON"]),
+            "course": float(final["COG"]), "speed_kt": float(final["SOG"]),
+            "range_km": haversine_km(segment["LAT"].min(), segment["LON"].min(),
+                                      segment["LAT"].max(), segment["LON"].max()),
+            # A vessel the corpus actually identifies: named, typed and
+            # dimensioned. The spill sources are picked from these so the demo
+            # names a real vessel, and so the response-priority score has a
+            # real size to weigh instead of a missing one.
+            "identified": bool(pd.notna(first["VesselName"])
+                               and pd.notna(first["Length"])
+                               and pd.notna(first["VesselType"])),
+        })
+
+    profile = pd.DataFrame(rows)
+    profile["dist_km"] = profile.apply(
+        lambda r: haversine_km(CLUSTER_CENTER_LAT, CLUSTER_CENTER_LON, r["lat"], r["lon"]), axis=1)
+    profile["heading_offset"] = profile.apply(
+        lambda r: angle_diff(r["course"],
+                             bearing_deg(r["lat"], r["lon"],
+                                         CLUSTER_CENTER_LAT, CLUSTER_CENTER_LON)), axis=1)
+    return profile
+
+
+def _projected_endpoint(row):
+    """Where this vessel gets to holding its final course/speed for the risk
+    horizon — the same straight-line projection services/risk.py uses."""
+    run_km = row["speed_kt"] * 1.852 * RISK_FORECAST_HOURS
+    return destination(row["lat"], row["lon"], run_km, row["course"])
+
+
+def _approach_km(row, targets):
+    """
+    Closest the vessel's projected track comes to any possible spill point.
+
+    This is the criterion the risk engine itself applies, so selecting on it
+    picks vessels that genuinely do (or genuinely do not) transit the area,
+    rather than guessing from a heading angle.
+    """
+    end = _projected_endpoint(row)
+    # Point-to-segment distance, walked in small steps — the leg is long
+    # (hours of transit) and this keeps the maths obvious.
+    steps = 60
+    best = float("inf")
+    for i in range(steps + 1):
+        lat = row["lat"] + (end[0] - row["lat"]) * i / steps
+        lon = row["lon"] + (end[1] - row["lon"]) * i / steps
+        for target in targets:
+            best = min(best, haversine_km(lat, lon, target["lat"], target["lon"]))
+    return best
+
+
 def select_cluster(corpus):
     """
-    ~FLEET_SIZE real vessels within CLUSTER_RADIUS_KM of the demo centre, split
-    into NEAR / CROSSING / MOVING AWAY by each vessel's own recorded position
-    and last course (see the constants above) so the fleet isn't one huddle
-    where every vessel is trivially "at risk" of whatever spill appears.
+    ~FLEET_SIZE real vessels split into NEAR / CROSSING / MOVING AWAY by the
+    position and course each one actually ends its session on, so the fleet
+    isn't one huddle where every vessel is trivially inside whatever spill
+    appears.
+
+    A spill lands on a NEAR vessel's own position, so the far buckets are
+    measured from the NEAR vessels themselves, not from the nominal centre —
+    that is what actually guarantees clear water between a vessel and the zone.
     """
-    stats = corpus.groupby("MMSI").agg(
-        n=("MMSI", "size"),
-        lat=("LAT", "mean"), lon=("LON", "mean"),
-        latmin=("LAT", "min"), latmax=("LAT", "max"),
-        lonmin=("LON", "min"), lonmax=("LON", "max"),
-    ).reset_index()
-    stats["dist_km"] = stats.apply(
-        lambda r: haversine_km(CLUSTER_CENTER_LAT, CLUSTER_CENTER_LON, r["lat"], r["lon"]), axis=1)
-    stats["range_km"] = stats.apply(
-        lambda r: haversine_km(r["latmin"], r["lonmin"], r["latmax"], r["lonmax"]), axis=1)
+    profile = vessel_profile(corpus)
+    eligible = profile[(profile["dist_km"] <= CLUSTER_RADIUS_KM)
+                       & (profile["range_km"] >= MIN_TRACK_RANGE_KM)]
 
-    last_fix = corpus.sort_values("BaseDateTime").groupby("MMSI").tail(1).set_index("MMSI")
-    stats["course"] = stats["MMSI"].map(last_fix["COG"])
-    stats["bearing_to_centre"] = stats.apply(
-        lambda r: bearing_deg(r["lat"], r["lon"], CLUSTER_CENTER_LAT, CLUSTER_CENTER_LON), axis=1)
-    stats["heading_offset"] = stats.apply(
-        lambda r: angle_diff(r["course"], r["bearing_to_centre"]), axis=1)
+    # Spill sources come from identified vessels only — an unnamed, undimensioned
+    # contact makes for a poor "who spilled" story and leaves the priority score
+    # with no vessel size to weigh.
+    near = eligible[(eligible["dist_km"] <= NEAR_KM)
+                    & eligible["identified"]].sort_values("dist_km")
+    near_rows = near.head(NEAR_COUNT)
+    selected = near_rows["MMSI"].tolist()
 
-    eligible = stats[(stats["n"] >= MIN_TRACK_POINTS)
-                      & (stats["dist_km"] <= CLUSTER_RADIUS_KM)
-                      & (stats["range_km"] >= MIN_TRACK_RANGE_KM)]
+    def clear_of_near(row):
+        """Kilometres to the closest possible spill point (a NEAR vessel)."""
+        return min(haversine_km(row["lat"], row["lon"], n["lat"], n["lon"])
+                   for _, n in near_rows.iterrows())
 
-    near = eligible[eligible["dist_km"] <= NEAR_KM].sort_values("dist_km")
-    far = eligible[eligible["dist_km"] > NEAR_KM]
-    crossing = far[far["heading_offset"] <= CROSS_ANGLE_DEG].sort_values("dist_km")
-    moving_away = far[far["heading_offset"] >= AWAY_ANGLE_DEG].sort_values("dist_km", ascending=False)
+    targets = [{"lat": n["lat"], "lon": n["lon"]} for _, n in near_rows.iterrows()]
+    rest = eligible[~eligible["MMSI"].isin(selected)].copy()
+    rest["clear_km"] = rest.apply(clear_of_near, axis=1)
+    rest["approach_km"] = rest.apply(lambda r: _approach_km(r, targets), axis=1)
+    far = rest[rest["clear_km"] >= FAR_MIN_KM]
 
-    selected: list = []
-    selected += near.head(NEAR_COUNT)["MMSI"].tolist()
+    # CROSSING: starts in clear water but its projected track runs into the
+    # zone. MOVING AWAY: never comes near it at all.
+    #
+    # The threshold is TWICE the envelope because the risk engine tests against
+    # the union of the current envelope AND the forward forecast polygons, which
+    # reach further downdrift than the envelope alone. Matching that here keeps
+    # selection and assessment consistent — a vessel picked as CROSSING is one
+    # the engine will actually flag.
+    envelope_km = impact_envelope(PASS_INTERVAL_HOURS)["radius_km"]
+    crossing = far[far["approach_km"] <= envelope_km * 2].sort_values("approach_km")
+    moving_away = far[far["approach_km"] > envelope_km * 2].sort_values(
+        "clear_km", ascending=False)
+
     selected += [m for m in crossing["MMSI"].tolist() if m not in selected][:CROSS_COUNT]
     remaining = FLEET_SIZE - len(selected)
     selected += [m for m in moving_away["MMSI"].tolist() if m not in selected][:remaining]
 
-    # Fall back to the next-nearest untouched vessels if a bucket came up
-    # short (e.g. not enough real traffic heading away from the centre).
+    # A bucket can come up short — this corpus is spatially concentrated and
+    # real traffic does not always oblige. Fall back to the vessels furthest
+    # from the NEAR trio, which is still the most useful thing to show.
     remaining = FLEET_SIZE - len(selected)
     if remaining > 0:
-        for mmsi in eligible.sort_values("dist_km")["MMSI"].tolist():
+        for mmsi in rest.sort_values("clear_km", ascending=False)["MMSI"].tolist():
             if mmsi not in selected:
                 selected.append(mmsi)
             if len(selected) >= FLEET_SIZE:
@@ -217,6 +310,12 @@ def build_fleet():
             "name": (first_row["VesselName"] if pd.notna(first_row["VesselName"])
                      else f"VESSEL {mmsi}"),
             "vessel_type": vessel_type_name(first_row["VesselType"]),
+            # Real recorded dimensions where the corpus has them. Used only as a
+            # size proxy when ranking response priority — never as a volume.
+            "length_m": (float(first_row["Length"]) if pd.notna(first_row["Length"])
+                         else None),
+            "width_m": (float(first_row["Width"]) if pd.notna(first_row["Width"])
+                        else None),
             "image_filename": f"ship{i}.jpg",
             "latitude": last["lat"], "longitude": last["lon"],
             "speed_kt": last["speed_kt"], "course_deg": last["course_deg"],

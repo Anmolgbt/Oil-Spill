@@ -60,11 +60,21 @@ def assign_t3_images(ship_ids, seed=SIMULATION_SEED, oil_min=T3_OIL_MIN, oil_max
     oil_count = rng.randint(oil_min, min(oil_max, len(eligible)))
     oil_ships = set(rng.sample(eligible, oil_count))
 
+    # Hand each oil-positive vessel a DIFFERENT tile where the pool allows it.
+    # Drawing with replacement gave two vessels the same tile, so the CNN
+    # returned the same confidence for both and every downstream comparison
+    # between the two spills came out tied.
+    oil_order = list(oil_pool)
+    rng.shuffle(oil_order)
+    oil_queue = iter(oil_order)
+
     assignments = []
     for ship_id in ship_ids:
         is_oil = ship_id in oil_ships
-        pool = oil_pool if is_oil else clean_pool
-        source = pool[rng.randrange(len(pool))]
+        if is_oil:
+            source = next(oil_queue, None) or oil_pool[rng.randrange(len(oil_pool))]
+        else:
+            source = clean_pool[rng.randrange(len(clean_pool))]
         assignments.append({
             "snapshot_id": "t3",
             "ship_id": ship_id,

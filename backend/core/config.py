@@ -46,3 +46,35 @@ T3_OIL_MAX = 2
 # buffered edge. Both are prototype constants, not navigational standards.
 RISK_FORECAST_HOURS = 6
 RISK_SAFETY_BUFFER_KM = 3.0
+
+# --- assumed environment ------------------------------------------------------
+# THESE ARE ASSUMPTIONS, NOT OBSERVATIONS. No wind/current/wave feed is wired
+# up, so the impact envelope in services/damage.py is driven by these stated
+# constants. Swapping in a real met-ocean feed means replacing these values and
+# nothing else. Directions are the compass bearing the flow moves TOWARD.
+ASSUMED_CURRENT_SPEED_MS = 0.25
+ASSUMED_CURRENT_DIRECTION_DEG = 170.0
+ASSUMED_WIND_SPEED_MS = 5.0
+ASSUMED_WIND_DIRECTION_DEG = 200.0
+
+# Standard slick-drift rule of thumb: a surface slick travels with the current
+# plus roughly 3% of the wind speed. Used to size the impact envelope.
+WIND_DRIFT_FACTOR = 0.03
+
+# Weights for the response-priority score (must sum to 1.0). The score ranks
+# spills against each other for response order; it is not a damage measurement.
+DAMAGE_WEIGHT_AREA = 0.45
+DAMAGE_WEIGHT_CONFIDENCE = 0.30
+DAMAGE_WEIGHT_VESSEL_SIZE = 0.25
+
+# --- simulated response assets ------------------------------------------------
+# FICTIONAL skimmer stations for the dispatch demo. These are not real
+# facilities and must never be presented as such. Positions are placed around
+# the demo AOI so the "nearest asset" answer differs per spill.
+SKIMMER_TRANSIT_SPEED_KT = 12.0
+SKIMMER_STATIONS = [
+    {"id": "skimmer-a", "name": "Response Cutter ALPHA", "latitude": 28.75, "longitude": -94.62},
+    {"id": "skimmer-b", "name": "Response Cutter BRAVO", "latitude": 28.40, "longitude": -95.05},
+    {"id": "skimmer-c", "name": "Skimmer Barge CHARLIE", "latitude": 28.34, "longitude": -94.55},
+    {"id": "skimmer-d", "name": "Skimmer Barge DELTA", "latitude": 28.72, "longitude": -95.10},
+]
