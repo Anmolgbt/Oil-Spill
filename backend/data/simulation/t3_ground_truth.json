@@ -4,187 +4,67 @@
  "note": "Internal/debug only. Assigned BEFORE any model ran and never passed to the CNN. Use only to verify the demo replays identically for a given seed.",
  "oil_positive_ships": [
   "ship1",
-  "ship24",
-  "ship4"
+  "ship2",
+  "ship5"
  ],
  "assignments": [
   {
    "snapshot_id": "t3",
    "ship_id": "ship1",
-   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/oil/t2_ship1.jpg",
-   "ground_truth_for_simulation": "oil"
-  },
-  {
-   "snapshot_id": "t3",
-   "ship_id": "ship2",
-   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/t0_ship3.jpg",
-   "ground_truth_for_simulation": "no_oil"
-  },
-  {
-   "snapshot_id": "t3",
-   "ship_id": "ship3",
-   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/t0_ship3.jpg",
-   "ground_truth_for_simulation": "no_oil"
-  },
-  {
-   "snapshot_id": "t3",
-   "ship_id": "ship4",
    "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/oil/class_1.jpg",
    "ground_truth_for_simulation": "oil"
   },
   {
    "snapshot_id": "t3",
-   "ship_id": "ship5",
+   "ship_id": "ship2",
+   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/oil/class_1.jpg",
+   "ground_truth_for_simulation": "oil"
+  },
+  {
+   "snapshot_id": "t3",
+   "ship_id": "ship3",
+   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/t0_ship2.jpg",
+   "ground_truth_for_simulation": "no_oil"
+  },
+  {
+   "snapshot_id": "t3",
+   "ship_id": "ship4",
    "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/t2_ship2.jpg",
    "ground_truth_for_simulation": "no_oil"
   },
   {
    "snapshot_id": "t3",
-   "ship_id": "ship6",
-   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/t0_ship1.jpg",
-   "ground_truth_for_simulation": "no_oil"
+   "ship_id": "ship5",
+   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/oil/class_1.jpg",
+   "ground_truth_for_simulation": "oil"
   },
   {
    "snapshot_id": "t3",
-   "ship_id": "ship7",
+   "ship_id": "ship6",
    "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/t1_ship5.jpg",
    "ground_truth_for_simulation": "no_oil"
   },
   {
    "snapshot_id": "t3",
-   "ship_id": "ship8",
+   "ship_id": "ship7",
    "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/t2_ship2.jpg",
+   "ground_truth_for_simulation": "no_oil"
+  },
+  {
+   "snapshot_id": "t3",
+   "ship_id": "ship8",
+   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/t1_ship3.jpg",
    "ground_truth_for_simulation": "no_oil"
   },
   {
    "snapshot_id": "t3",
    "ship_id": "ship9",
-   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/t1_ship3.jpg",
+   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/t0_ship1.jpg",
    "ground_truth_for_simulation": "no_oil"
   },
   {
    "snapshot_id": "t3",
    "ship_id": "ship10",
-   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/t0_ship1.jpg",
-   "ground_truth_for_simulation": "no_oil"
-  },
-  {
-   "snapshot_id": "t3",
-   "ship_id": "ship11",
-   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/t1_ship4.jpg",
-   "ground_truth_for_simulation": "no_oil"
-  },
-  {
-   "snapshot_id": "t3",
-   "ship_id": "ship12",
-   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/t1_ship1.jpg",
-   "ground_truth_for_simulation": "no_oil"
-  },
-  {
-   "snapshot_id": "t3",
-   "ship_id": "ship13",
-   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/class_0.jpg",
-   "ground_truth_for_simulation": "no_oil"
-  },
-  {
-   "snapshot_id": "t3",
-   "ship_id": "ship14",
-   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/class_0.jpg",
-   "ground_truth_for_simulation": "no_oil"
-  },
-  {
-   "snapshot_id": "t3",
-   "ship_id": "ship15",
-   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/t0_ship1.jpg",
-   "ground_truth_for_simulation": "no_oil"
-  },
-  {
-   "snapshot_id": "t3",
-   "ship_id": "ship16",
-   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/t0_ship3.jpg",
-   "ground_truth_for_simulation": "no_oil"
-  },
-  {
-   "snapshot_id": "t3",
-   "ship_id": "ship17",
-   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/t0_ship3.jpg",
-   "ground_truth_for_simulation": "no_oil"
-  },
-  {
-   "snapshot_id": "t3",
-   "ship_id": "ship18",
-   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/t1_ship3.jpg",
-   "ground_truth_for_simulation": "no_oil"
-  },
-  {
-   "snapshot_id": "t3",
-   "ship_id": "ship19",
-   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/t1_ship4.jpg",
-   "ground_truth_for_simulation": "no_oil"
-  },
-  {
-   "snapshot_id": "t3",
-   "ship_id": "ship20",
-   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/class_0.jpg",
-   "ground_truth_for_simulation": "no_oil"
-  },
-  {
-   "snapshot_id": "t3",
-   "ship_id": "ship21",
-   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/t1_ship3.jpg",
-   "ground_truth_for_simulation": "no_oil"
-  },
-  {
-   "snapshot_id": "t3",
-   "ship_id": "ship22",
-   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/t0_ship3.jpg",
-   "ground_truth_for_simulation": "no_oil"
-  },
-  {
-   "snapshot_id": "t3",
-   "ship_id": "ship23",
-   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/t2_ship2.jpg",
-   "ground_truth_for_simulation": "no_oil"
-  },
-  {
-   "snapshot_id": "t3",
-   "ship_id": "ship24",
-   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/oil/t2_ship5.jpg",
-   "ground_truth_for_simulation": "oil"
-  },
-  {
-   "snapshot_id": "t3",
-   "ship_id": "ship25",
-   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/t2_ship2.jpg",
-   "ground_truth_for_simulation": "no_oil"
-  },
-  {
-   "snapshot_id": "t3",
-   "ship_id": "ship26",
-   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/t1_ship3.jpg",
-   "ground_truth_for_simulation": "no_oil"
-  },
-  {
-   "snapshot_id": "t3",
-   "ship_id": "ship27",
-   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/t1_ship1.jpg",
-   "ground_truth_for_simulation": "no_oil"
-  },
-  {
-   "snapshot_id": "t3",
-   "ship_id": "ship28",
-   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/t0_ship3.jpg",
-   "ground_truth_for_simulation": "no_oil"
-  },
-  {
-   "snapshot_id": "t3",
-   "ship_id": "ship29",
-   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/t1_ship2.jpg",
-   "ground_truth_for_simulation": "no_oil"
-  },
-  {
-   "snapshot_id": "t3",
-   "ship_id": "ship30",
    "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/t1_ship4.jpg",
    "ground_truth_for_simulation": "no_oil"
   }

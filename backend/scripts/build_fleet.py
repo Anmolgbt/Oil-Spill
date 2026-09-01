@@ -44,7 +44,7 @@ from services.t3_simulation import CLEAN_POOL_DIR, write_t3_snapshot
 FLEET_FILE = SIMULATION_DIR / "fleet.json"
 SNAPSHOTS_DIR = SIMULATION_DIR / "snapshots"
 
-FLEET_SIZE = 30
+FLEET_SIZE = 10
 # A real, historically busy patch of Gulf traffic. This is only used to pick a
 # geographically tight CLUSTER out of the corpus — the vessels' own recorded
 # coordinates are what gets used everywhere downstream.

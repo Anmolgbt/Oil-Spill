@@ -1,7 +1,7 @@
 import {useEffect, useMemo, useState} from "react";
 import {CircleMarker, MapContainer, Polygon, Polyline, TileLayer, Tooltip, useMap} from "react-leaflet";
 import L from "leaflet";
-import {AlertTriangle, Anchor, Check, FileText, Info, X} from "lucide-react";
+import {AlertTriangle, Anchor, Check, ExternalLink, FileText, Info, X} from "lucide-react";
 import {NOT_AVAILABLE, fleetViewport, getInvestigation, runFleetScan, show, showCoord, showPct} from "./lib/oiltrace";
 
 /**
@@ -53,6 +53,135 @@ function MapFit({points}: {points: [number, number][] | null}) {
     return () => { window.clearTimeout(t); window.removeEventListener("resize", fit); };
   }, [points && points.length, points && points[0][0]]);
   return null;
+}
+
+/**
+ * The Leaflet map itself, factored out so the same map can render inside the
+ * normal dashboard layout AND full-size in its own browser tab (opened via
+ * "Open map in new tab", for a screen where the docked map panel is too
+ * small to comfortably pan/zoom).
+ */
+function MapView({view, envelope, detected, shownSpill, shownArea, shownSource, source,
+                   shownForecast, selectedRisk, selected, setSelected, fleet, riskByShipId,
+                   legendOpen, setLegendOpen, mapStyle}: any) {
+  return (
+    <MapContainer center={view?.center ?? FALLBACK_CENTER} zoom={7} className="map" style={mapStyle} scrollWheelZoom>
+      <MapFit points={view?.points ?? null} />
+      <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+
+      {/* possible affected area — drift envelope, never a measured slick */}
+      {envelope && (
+        <Polygon positions={envelope} pathOptions={{color: "#c0261b", fillColor: "#c0261b", fillOpacity: .05, weight: 1.5, dashArray: "5 6"}}>
+          <Tooltip>{shownSpill?.ship_name} · possible affected area, {fmt(shownArea?.radius_km)} km radius<br />Drift envelope, not a measured slick</Tooltip>
+        </Polygon>
+      )}
+
+      {/* hindcast: spill back to probable source */}
+      {detected && shownSource && shownSpill && (
+        <>
+          <Polyline positions={[[shownSource.latitude, shownSource.longitude], [shownSpill.latitude, shownSpill.longitude]]}
+                    pathOptions={{color: "#b45309", weight: 3, opacity: .85}}>
+            <Tooltip>{shownSpill.ship_name} · drift traced back {show(shownSource.hours_backward)} h</Tooltip>
+          </Polyline>
+          <CircleMarker center={[shownSource.latitude, shownSource.longitude]} radius={8}
+                        pathOptions={{color: "#b45309", fillColor: "#f59e0b", fillOpacity: .9, weight: 3}}>
+            <Tooltip>Probable source — model estimate<br />{showCoord(shownSource.latitude)}, {showCoord(shownSource.longitude)}</Tooltip>
+          </CircleMarker>
+        </>
+      )}
+
+      {/* forward kinematic projection */}
+      {detected && shownForecast?.points?.length > 0 && shownSpill && (
+        <>
+          <Polyline positions={[[shownSpill.latitude, shownSpill.longitude], ...shownForecast.points.map((p: any) => [p.latitude, p.longitude] as [number, number])]}
+                    pathOptions={{color: "#0b5cab", weight: 2.5, dashArray: "2 7", opacity: .9}} />
+          {shownForecast.points.map((p: any) => (
+            <CircleMarker key={p.hours_ahead} center={[p.latitude, p.longitude]} radius={4}
+                          pathOptions={{color: "#0b5cab", fillColor: "#fff", fillOpacity: 1, weight: 2.5}}>
+              <Tooltip>+{p.hours_ahead} h · {showCoord(p.latitude, 4)}, {showCoord(p.longitude, 4)}<br />Kinematic projection</Tooltip>
+            </CircleMarker>
+          ))}
+        </>
+      )}
+
+      {/* FORWARD RISK: selected vessel's projected track and, if it
+          intersects the spill, the simulated detour. Separate concept
+          from attribution — this is forward-looking, not historic. */}
+      {selectedRisk && (
+        <>
+          <Polyline
+            positions={selectedRisk.projected_route.map((p: any) => [p.latitude, p.longitude] as [number, number])}
+            pathOptions={{color: "#c0261b", weight: 2.5, dashArray: "1 6", opacity: .9}}>
+            <Tooltip>{selected.name} · projected track (kinematic, {selectedRisk.forecast_horizon_hours} h)<br />Not a navigational prediction</Tooltip>
+          </Polyline>
+          {selectedRisk.detour && (
+            <Polyline
+              positions={selectedRisk.detour.detour_waypoints.map((p: any) => [p.latitude, p.longitude] as [number, number])}
+              pathOptions={{color: "#1a8a4a", weight: 3, dashArray: "6 4", opacity: .95}}>
+              <Tooltip>{selected.name} · SIMULATED ROUTE AVOIDANCE<br />
+                {fmt(selectedRisk.detour.original_heading_deg, 0)}° → {fmt(selectedRisk.detour.suggested_heading_deg, 0)}°
+                ({selectedRisk.detour.heading_change_deg > 0 ? "+" : ""}{fmt(selectedRisk.detour.heading_change_deg, 0)}°)<br />
+                Demo only — not navigation guidance</Tooltip>
+            </Polyline>
+          )}
+        </>
+      )}
+
+      {/* track of the selected vessel only, to keep the map readable */}
+      {selected?.track?.length > 1 && (
+        <Polyline positions={selected.track.map((p: any) => [p.lat, p.lon] as [number, number])}
+                  pathOptions={{color: "#8a95a3", weight: 2.5, opacity: .8}}>
+          <Tooltip>{selected.name} · AIS track</Tooltip>
+        </Polyline>
+      )}
+
+      {/* monitored vessels — an amber ring marks a vessel FORWARD RISK
+          flagged as projected to enter the spill area (separate from
+          the oil-detected red fill, which is the CNN's own call). */}
+      {fleet.map((s: any) => {
+        const atRisk = riskByShipId[s.id];
+        return (
+          <CircleMarker
+            key={s.id}
+            center={[s.latitude, s.longitude]}
+            radius={s.oil_detected ? 10 : atRisk ? 8 : 6}
+            pathOptions={{
+              color: s.oil_detected ? "#c0261b" : atRisk ? "#b8860b" : "#0b5cab",
+              fillColor: s.oil_detected ? "#e2554a" : "#5b9bd8",
+              fillOpacity: selected?.id === s.id ? 1 : .8,
+              weight: selected?.id === s.id ? 4 : (atRisk ? 3 : 2),
+              dashArray: atRisk && !s.oil_detected ? "3 2" : undefined,
+            }}
+            eventHandlers={{click: () => setSelected(s)}}
+          >
+            <Tooltip>
+              <b>{s.name}</b><br />MMSI {s.mmsi}<br />
+              {s.status}{s.confidence ? ` · ${showPct(s.confidence)}` : ""}
+              {atRisk && <><br /><b>AT RISK</b> · entry ~{atRisk.estimated_entry_minutes} min</>}
+            </Tooltip>
+          </CircleMarker>
+        );
+      })}
+
+      {legendOpen && <div className="legend">
+        <b>LEGEND</b>
+        <span><i className="dot" style={{background: "#5b9bd8"}} />Vessel</span>
+        <span><i className="dot" style={{background: "#e2554a"}} />Oil detected</span>
+        <span><i style={{width: 18, height: 0, borderTop: "2px solid #8a95a3"}} />Selected vessel's past track</span>
+        {detected && <span><i style={{width: 18, height: 0, borderTop: "3px solid #b45309"}} />Where the oil drifted from ({show(source?.hours_backward)} h)</span>}
+        {detected && <span><i style={{width: 18, height: 0, borderTop: "2px dotted #0b5cab"}} />Where it will drift next (48 h)</span>}
+        {detected && <span><i style={{width: 18, height: 0, borderTop: "1px dashed #c0261b"}} />Possible affected area</span>}
+        {detected && <span><i style={{width: 10, height: 10, borderRadius: "50%", border: "2px dashed #b8860b", display: "inline-block"}} />Vessel at risk (forward projection)</span>}
+        {detected && <span><i style={{width: 18, height: 0, borderTop: "3px dashed #1a8a4a"}} />Simulated detour (demo only)</span>}
+      </div>}
+      <button className={"legendbtn" + (legendOpen ? " open" : "")}
+              onClick={() => setLegendOpen((v: boolean) => !v)}
+              title={legendOpen ? "Hide legend" : "What do the colours and lines mean?"}
+              aria-label="Toggle map legend" aria-expanded={legendOpen}>
+        <Info size={17} />
+      </button>
+    </MapContainer>
+  );
 }
 
 function App() {
@@ -118,7 +247,13 @@ function App() {
     setRunning(false);
   };
 
-  useEffect(() => { load(); }, []);
+  // Full-size map opened in its own tab reads the pass to show from the URL
+  // (?view=map&snapshot=t3), rather than sharing state with the tab it came from.
+  const isFullMap = new URLSearchParams(window.location.search).get("view") === "map";
+  useEffect(() => {
+    const snapshot = new URLSearchParams(window.location.search).get("snapshot") || undefined;
+    load(snapshot);
+  }, []);
 
   const fleet = scan?.fleet || [];
   const spill = scan?.spill;
@@ -163,6 +298,33 @@ function App() {
   if (error) return <div className="loading">{error}</div>;
 
   const mode = fallback ? "STORED RESULT" : "LIVE INFERENCE";
+
+  // Full-size map tab: just the map, filling the window, plus a thin header
+  // so the pass and vessel count are still visible without the docked panels.
+  if (isFullMap) {
+    return (
+      <div className="app" style={{height: "100vh", display: "flex", flexDirection: "column"}}>
+        <header className="topbar">
+          <div className="brand">
+            <div className="brandmark"><Anchor size={18} /></div>
+            <div><b>OILTRACE</b><small>MAP · PASS {scan.snapshot_id ? String(scan.snapshot_id).toUpperCase() : "—"}</small></div>
+          </div>
+          <div className="incident">
+            <Badge tone={fallback ? "amber" : "blue"}>{mode}</Badge>
+            <span className="subtle">{fleet.length} vessels{detected ? " · spill detected" : " · all clear"}</span>
+          </div>
+        </header>
+        <div style={{flex: 1, minHeight: 0, position: "relative"}}>
+          <MapView view={view} envelope={envelope} detected={detected} shownSpill={shownSpill}
+                    shownArea={shownArea} shownSource={shownSource} source={source}
+                    shownForecast={shownForecast} selectedRisk={selectedRisk} selected={selected}
+                    setSelected={setSelected} fleet={fleet} riskByShipId={riskByShipId}
+                    legendOpen={legendOpen} setLegendOpen={setLegendOpen}
+                    mapStyle={{height: "100%", width: "100%"}} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="app">
@@ -273,125 +435,24 @@ function App() {
               {detected
                 ? <><Badge tone="red">SPILL</Badge><Badge tone="amber">SOURCE ESTIMATE</Badge></>
                 : <Badge tone="blue">ALL CLEAR</Badge>}
+              <button className="reportbtn" title="Open the map full-size in a new tab"
+                      onClick={() => window.open(
+                        `${window.location.pathname}?view=map${scan.snapshot_id ? `&snapshot=${scan.snapshot_id}` : ""}`,
+                        "_blank"
+                      )}
+                      style={{border: "1px solid var(--line)", background: "var(--panel)",
+                              borderRadius: 7, padding: "6px 10px", fontSize: 13, fontWeight: 600,
+                              display: "flex", alignItems: "center", gap: 6, cursor: "pointer", marginLeft: 8}}>
+                <ExternalLink size={13} /> Open map in new tab
+              </button>
             </div>
           </div>
 
-          <MapContainer center={view?.center ?? FALLBACK_CENTER} zoom={7} className="map" scrollWheelZoom>
-            <MapFit points={view?.points ?? null} />
-            <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-
-            {/* possible affected area — drift envelope, never a measured slick */}
-            {envelope && (
-              <Polygon positions={envelope} pathOptions={{color: "#c0261b", fillColor: "#c0261b", fillOpacity: .05, weight: 1.5, dashArray: "5 6"}}>
-                <Tooltip>{shownSpill?.ship_name} · possible affected area, {fmt(shownArea?.radius_km)} km radius<br />Drift envelope, not a measured slick</Tooltip>
-              </Polygon>
-            )}
-
-            {/* hindcast: spill back to probable source */}
-            {detected && shownSource && shownSpill && (
-              <>
-                <Polyline positions={[[shownSource.latitude, shownSource.longitude], [shownSpill.latitude, shownSpill.longitude]]}
-                          pathOptions={{color: "#b45309", weight: 3, opacity: .85}}>
-                  <Tooltip>{shownSpill.ship_name} · drift traced back {show(shownSource.hours_backward)} h</Tooltip>
-                </Polyline>
-                <CircleMarker center={[shownSource.latitude, shownSource.longitude]} radius={8}
-                              pathOptions={{color: "#b45309", fillColor: "#f59e0b", fillOpacity: .9, weight: 3}}>
-                  <Tooltip>Probable source — model estimate<br />{showCoord(shownSource.latitude)}, {showCoord(shownSource.longitude)}</Tooltip>
-                </CircleMarker>
-              </>
-            )}
-
-            {/* forward kinematic projection */}
-            {detected && shownForecast?.points?.length > 0 && shownSpill && (
-              <>
-                <Polyline positions={[[shownSpill.latitude, shownSpill.longitude], ...shownForecast.points.map((p: any) => [p.latitude, p.longitude] as [number, number])]}
-                          pathOptions={{color: "#0b5cab", weight: 2.5, dashArray: "2 7", opacity: .9}} />
-                {shownForecast.points.map((p: any) => (
-                  <CircleMarker key={p.hours_ahead} center={[p.latitude, p.longitude]} radius={4}
-                                pathOptions={{color: "#0b5cab", fillColor: "#fff", fillOpacity: 1, weight: 2.5}}>
-                    <Tooltip>+{p.hours_ahead} h · {showCoord(p.latitude, 4)}, {showCoord(p.longitude, 4)}<br />Kinematic projection</Tooltip>
-                  </CircleMarker>
-                ))}
-              </>
-            )}
-
-            {/* FORWARD RISK: selected vessel's projected track and, if it
-                intersects the spill, the simulated detour. Separate concept
-                from attribution — this is forward-looking, not historic. */}
-            {selectedRisk && (
-              <>
-                <Polyline
-                  positions={selectedRisk.projected_route.map((p: any) => [p.latitude, p.longitude] as [number, number])}
-                  pathOptions={{color: "#c0261b", weight: 2.5, dashArray: "1 6", opacity: .9}}>
-                  <Tooltip>{selected.name} · projected track (kinematic, {selectedRisk.forecast_horizon_hours} h)<br />Not a navigational prediction</Tooltip>
-                </Polyline>
-                {selectedRisk.detour && (
-                  <Polyline
-                    positions={selectedRisk.detour.detour_waypoints.map((p: any) => [p.latitude, p.longitude] as [number, number])}
-                    pathOptions={{color: "#1a8a4a", weight: 3, dashArray: "6 4", opacity: .95}}>
-                    <Tooltip>{selected.name} · SIMULATED ROUTE AVOIDANCE<br />
-                      {fmt(selectedRisk.detour.original_heading_deg, 0)}° → {fmt(selectedRisk.detour.suggested_heading_deg, 0)}°
-                      ({selectedRisk.detour.heading_change_deg > 0 ? "+" : ""}{fmt(selectedRisk.detour.heading_change_deg, 0)}°)<br />
-                      Demo only — not navigation guidance</Tooltip>
-                  </Polyline>
-                )}
-              </>
-            )}
-
-            {/* track of the selected vessel only, to keep the map readable */}
-            {selected?.track?.length > 1 && (
-              <Polyline positions={selected.track.map((p: any) => [p.lat, p.lon] as [number, number])}
-                        pathOptions={{color: "#8a95a3", weight: 2.5, opacity: .8}}>
-                <Tooltip>{selected.name} · AIS track</Tooltip>
-              </Polyline>
-            )}
-
-            {/* monitored vessels — an amber ring marks a vessel FORWARD RISK
-                flagged as projected to enter the spill area (separate from
-                the oil-detected red fill, which is the CNN's own call). */}
-            {fleet.map((s: any) => {
-              const atRisk = riskByShipId[s.id];
-              return (
-                <CircleMarker
-                  key={s.id}
-                  center={[s.latitude, s.longitude]}
-                  radius={s.oil_detected ? 10 : atRisk ? 8 : 6}
-                  pathOptions={{
-                    color: s.oil_detected ? "#c0261b" : atRisk ? "#b8860b" : "#0b5cab",
-                    fillColor: s.oil_detected ? "#e2554a" : "#5b9bd8",
-                    fillOpacity: selected?.id === s.id ? 1 : .8,
-                    weight: selected?.id === s.id ? 4 : (atRisk ? 3 : 2),
-                    dashArray: atRisk && !s.oil_detected ? "3 2" : undefined,
-                  }}
-                  eventHandlers={{click: () => setSelected(s)}}
-                >
-                  <Tooltip>
-                    <b>{s.name}</b><br />MMSI {s.mmsi}<br />
-                    {s.status}{s.confidence ? ` · ${showPct(s.confidence)}` : ""}
-                    {atRisk && <><br /><b>AT RISK</b> · entry ~{atRisk.estimated_entry_minutes} min</>}
-                  </Tooltip>
-                </CircleMarker>
-              );
-            })}
-
-            {legendOpen && <div className="legend">
-              <b>LEGEND</b>
-              <span><i className="dot" style={{background: "#5b9bd8"}} />Vessel</span>
-              <span><i className="dot" style={{background: "#e2554a"}} />Oil detected</span>
-              <span><i style={{width: 18, height: 0, borderTop: "2px solid #8a95a3"}} />Selected vessel's past track</span>
-              {detected && <span><i style={{width: 18, height: 0, borderTop: "3px solid #b45309"}} />Where the oil drifted from ({show(source?.hours_backward)} h)</span>}
-              {detected && <span><i style={{width: 18, height: 0, borderTop: "2px dotted #0b5cab"}} />Where it will drift next (48 h)</span>}
-              {detected && <span><i style={{width: 18, height: 0, borderTop: "1px dashed #c0261b"}} />Possible affected area</span>}
-              {detected && <span><i style={{width: 10, height: 10, borderRadius: "50%", border: "2px dashed #b8860b", display: "inline-block"}} />Vessel at risk (forward projection)</span>}
-              {detected && <span><i style={{width: 18, height: 0, borderTop: "3px dashed #1a8a4a"}} />Simulated detour (demo only)</span>}
-            </div>}
-            <button className={"legendbtn" + (legendOpen ? " open" : "")}
-                    onClick={() => setLegendOpen((v) => !v)}
-                    title={legendOpen ? "Hide legend" : "What do the colours and lines mean?"}
-                    aria-label="Toggle map legend" aria-expanded={legendOpen}>
-              <Info size={17} />
-            </button>
-          </MapContainer>
+          <MapView view={view} envelope={envelope} detected={detected} shownSpill={shownSpill}
+                    shownArea={shownArea} shownSource={shownSource} source={source}
+                    shownForecast={shownForecast} selectedRisk={selectedRisk} selected={selected}
+                    setSelected={setSelected} fleet={fleet} riskByShipId={riskByShipId}
+                    legendOpen={legendOpen} setLegendOpen={setLegendOpen} />
 
           <div className="mapbottom">
             <div className="env">
