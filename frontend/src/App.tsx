@@ -1,5 +1,5 @@
 import {useEffect, useMemo, useState} from "react";
-import {CircleMarker, MapContainer, Marker, Polygon, Polyline, TileLayer, Tooltip, useMap} from "react-leaflet";
+import {CircleMarker, MapContainer, Polygon, Polyline, TileLayer, Tooltip, useMap} from "react-leaflet";
 import L from "leaflet";
 import {AlertTriangle, Anchor, Check, ExternalLink, FileText, Info, X} from "lucide-react";
 import {NOT_AVAILABLE, fleetViewport, getInvestigation, runFleetScan, show, showCoord, showPct} from "./lib/oiltrace";
@@ -27,21 +27,6 @@ const ring = (lat: number, lon: number, km: number): [number, number][] => {
     return [lat + dLat * Math.cos(a), lon + dLon * Math.sin(a)] as [number, number];
   });
 };
-
-/** Green "+" pin for a simulated skimmer station; filled when it's the one
- *  recommended for the spill currently in view. */
-const skimmerIcon = (recommended: boolean) =>
-  L.divIcon({
-    className: "",
-    iconSize: [22, 22],
-    iconAnchor: [11, 11],
-    html:
-      `<div style="width:22px;height:22px;border-radius:5px;display:flex;` +
-      `align-items:center;justify-content:center;font:700 17px/1 system-ui;` +
-      `color:${recommended ? "#fff" : "#1a8a4a"};` +
-      `background:${recommended ? "#1a8a4a" : "rgba(255,255,255,.92)"};` +
-      `border:2px solid #1a8a4a;box-shadow:0 1px 3px rgba(0,0,0,.3)">+</div>`,
-  });
 
 function Card({children, className = ""}: {children: any; className?: string}) {
   return <section className={"card " + className}>{children}</section>;
@@ -78,7 +63,7 @@ function MapFit({points}: {points: [number, number][] | null}) {
  */
 function MapView({view, envelope, detected, shownSpill, shownArea, shownSource, source,
                    shownForecast, selectedRisk, selected, setSelected, fleet, riskByShipId,
-                   legendOpen, setLegendOpen, mapStyle, skimmers, recommendedSkimmerId}: any) {
+                   legendOpen, setLegendOpen, mapStyle}: any) {
   return (
     <MapContainer center={view?.center ?? FALLBACK_CENTER} zoom={7} className="map" style={mapStyle} scrollWheelZoom>
       <MapFit points={view?.points ?? null} />
@@ -162,16 +147,6 @@ function MapView({view, envelope, detected, shownSpill, shownArea, shownSource, 
         </Polyline>
       )}
 
-      {/* Simulated skimmer stations. Green + marks a response asset. */}
-      {(skimmers || []).map((s: any) => (
-        <Marker key={s.id} position={[s.latitude, s.longitude]} icon={skimmerIcon(s.id === recommendedSkimmerId)}>
-          <Tooltip>
-            <b>{s.name}</b><br />Simulated response asset
-            {s.id === recommendedSkimmerId && <><br /><b>NEAREST TO THIS SPILL</b></>}
-          </Tooltip>
-        </Marker>
-      ))}
-
       {/* monitored vessels — an amber ring marks a vessel FORWARD RISK
           flagged as projected to enter the spill area (separate from
           the oil-detected red fill, which is the CNN's own call). */}
@@ -211,7 +186,6 @@ function MapView({view, envelope, detected, shownSpill, shownArea, shownSource, 
         {detected && <span><i style={{width: 10, height: 10, borderRadius: "50%", border: "2px dashed #b8860b", display: "inline-block"}} />Vessel at risk (forward projection)</span>}
         {detected && <span><i style={{width: 18, height: 0, borderTop: "3px dashed #1a8a4a"}} />Simulated detour (demo only)</span>}
         <span><i style={{width: 18, height: 0, borderTop: "2px dashed #0b5cab"}} />Selected vessel's projected track</span>
-        <span><i style={{width: 12, height: 12, borderRadius: 3, border: "2px solid #1a8a4a", background: "#1a8a4a", display: "inline-block"}} />Skimmer station (simulated)</span>
       </div>}
       <button className={"legendbtn" + (legendOpen ? " open" : "")}
               onClick={() => setLegendOpen((v: boolean) => !v)}
@@ -333,13 +307,6 @@ function App() {
   );
   const selectedRisk = selected ? riskByShipId[selected.id] : undefined;
 
-  // RESPONSE — simulated skimmer assets, and which one reaches the spill
-  // currently in view fastest. Stations show on every pass; the recommendation
-  // only exists once there is a spill to respond to.
-  const skimmers = scan?.skimmers || [];
-  const shownResponse = shown?.response;
-  const recommendedSkimmerId = shownResponse?.recommended?.skimmer_id;
-  const shownDamage = shown?.damage;
 
   if (!scan && !error) return <div className="loading">Loading OILTRACE…</div>;
   if (error) return <div className="loading">{error}</div>;
@@ -367,7 +334,6 @@ function App() {
                     shownForecast={shownForecast} selectedRisk={selectedRisk} selected={selected}
                     setSelected={setSelected} fleet={fleet} riskByShipId={riskByShipId}
                     legendOpen={legendOpen} setLegendOpen={setLegendOpen}
-                    skimmers={skimmers} recommendedSkimmerId={recommendedSkimmerId}
                     mapStyle={{height: "100%", width: "100%"}} />
         </div>
       </div>
@@ -500,8 +466,7 @@ function App() {
                     shownArea={shownArea} shownSource={shownSource} source={source}
                     shownForecast={shownForecast} selectedRisk={selectedRisk} selected={selected}
                     setSelected={setSelected} fleet={fleet} riskByShipId={riskByShipId}
-                    legendOpen={legendOpen} setLegendOpen={setLegendOpen}
-                    skimmers={skimmers} recommendedSkimmerId={recommendedSkimmerId} />
+                    legendOpen={legendOpen} setLegendOpen={setLegendOpen} />
 
           <div className="mapbottom">
             {/* Assumed conditions, labelled as such. These now drive the impact
@@ -596,9 +561,9 @@ function App() {
                           {sel.response_priority ?? NOT_AVAILABLE}
                           {sel.damage ? ` · ${fmt(sel.damage.priority_score)}/100` : ""}
                         </b></div>
-                      <div><small>Nearest skimmer</small>
-                        <b>{sel.response?.recommended
-                            ? `${sel.response.recommended.name} · ${sel.response.recommended.eta_minutes} min`
+                      <div><small>Recommended action</small>
+                        <b>{sel.response
+                            ? `${sel.response.urgency} — ${sel.response.action}`
                             : NOT_AVAILABLE}</b></div>
                     </div>
                     <div className="metrics">
@@ -620,47 +585,50 @@ function App() {
         </aside>
       </main>
 
-      {/* ---------------- leaking-vessel leaderboard ---------------- */}
-      {detected && (
+      {/* ---------------- response: which spill first, and who goes ---------------- */}
+      {detected && (scan.response_priorities || []).length > 0 && (
         <div className="oilstrip">
           <div className="eyebrow">
-            VESSELS SHOWING AN OIL SIGNATURE
+            RESPONSE PRIORITY <Badge tone="red">ACTION REQUIRED</Badge>
             <span style={{marginLeft: "auto", textTransform: "none", letterSpacing: 0}}>
-              {(scan.detections || []).length} of {scan.scanned} scanned
+              {scan.response_priorities.length} live spill{scan.response_priorities.length === 1 ? "" : "s"}
             </span>
           </div>
           <div className="oilhead">
-            <span>#</span><span>Vessel</span><span>Position</span>
-            <span>Attribution</span><span>CNN confidence</span>
+            <span>#</span><span>Spill</span><span>Impact envelope</span>
+            <span>Recommended action</span><span>Priority</span>
           </div>
-          {(scan.detections || []).map((d: any, i: number) => {
-            const rank = rankByMmsi[d.mmsi];
+          {scan.response_priorities.map((p: any) => {
+            const entry = (scan.spills || []).find((sp: any) => sp.spill?.ship_id === p.ship_id);
+            const act = entry?.response;
             return (
-              <button key={d.id}
-                      className={"oilrank " + (selected?.id === d.id ? "selected" : "")}
-                      onClick={() => setSelected(d)}>
+              <button key={p.ship_id}
+                      className={"oilrank " + (selected?.id === p.ship_id ? "selected" : "")}
+                      onClick={() => setSelected(fleet.find((f: any) => f.id === p.ship_id))}>
                 <span className="pos">
-                  {i + 1}
-                  <i className="dot" style={{background: "#e2554a"}} />
+                  {p.response_priority}
+                  <i className="dot" style={{background: "#c0261b"}} />
                 </span>
                 <span className="vessel">
-                  <b>{d.name}</b>
-                  <small>MMSI {d.mmsi} · {d.vessel_type}</small>
+                  <b>{p.ship_name}</b>
+                  <small>MMSI {p.mmsi}</small>
                 </span>
                 <span className="meta">
-                  {showCoord(d.latitude, 3)}, {showCoord(d.longitude, 3)}
+                  {fmt(p.envelope_radius_km)} km radius · {fmt(p.envelope_area_km2, 0)} km²
                 </span>
                 <span className="sus">
-                  {rank
-                    ? <>Suspect #{rank.rank} · score <b>{fmt(rank.final_suspect_score)}</b> · {fmt(rank.minimum_distance_km, 1)} km from source</>
-                    : <>Not ranked — not near the estimated source in the release window</>}
+                  {act
+                    ? <><b>{act.urgency}</b> · {act.action}</>
+                    : "No action determined"}
                 </span>
-                <span className="pct">{showPct(d.confidence, 1)}</span>
+                <span className="pct">{fmt(p.priority_score)}</span>
               </button>
             );
           })}
           <div className="subtle" style={{marginTop: 6, fontSize: 12}}>
-            Analytical association with an estimated source window — not proof of responsibility.
+            Priority score ranks spills against each other for response order — it is not a measure of harm
+            caused, oil volume or cost, and excludes shoreline proximity and habitat sensitivity. Escalation
+            advice only: this prototype does not model response assets, crews or arrival times.
           </div>
         </div>
       )}
@@ -713,54 +681,6 @@ function App() {
           <div className="subtle" style={{marginTop: 6, fontSize: 12}}>
             Kinematic projection from each vessel's current speed/heading — a prototype trajectory, not a
             navigational prediction. Detour headings are a SIMULATED ROUTE AVOIDANCE demo, not maritime guidance.
-          </div>
-        </div>
-      )}
-
-      {/* ---------------- response: which spill first, and who goes ---------------- */}
-      {detected && (scan.response_priorities || []).length > 0 && (
-        <div className="oilstrip">
-          <div className="eyebrow">
-            RESPONSE PRIORITY <Badge tone="amber">SIMULATED DISPATCH</Badge>
-            <span style={{marginLeft: "auto", textTransform: "none", letterSpacing: 0}}>
-              {scan.response_priorities.length} live spill{scan.response_priorities.length === 1 ? "" : "s"}
-            </span>
-          </div>
-          <div className="oilhead">
-            <span>#</span><span>Spill</span><span>Impact envelope</span>
-            <span>Nearest skimmer</span><span>Priority</span>
-          </div>
-          {scan.response_priorities.map((p: any) => {
-            const entry = (scan.spills || []).find((sp: any) => sp.spill?.ship_id === p.ship_id);
-            const best = entry?.response?.recommended;
-            return (
-              <button key={p.ship_id}
-                      className={"oilrank " + (selected?.id === p.ship_id ? "selected" : "")}
-                      onClick={() => setSelected(fleet.find((f: any) => f.id === p.ship_id))}>
-                <span className="pos">
-                  {p.response_priority}
-                  <i className="dot" style={{background: "#c0261b"}} />
-                </span>
-                <span className="vessel">
-                  <b>{p.ship_name}</b>
-                  <small>MMSI {p.mmsi}</small>
-                </span>
-                <span className="meta">
-                  {fmt(p.envelope_radius_km)} km radius · {fmt(p.envelope_area_km2, 0)} km²
-                </span>
-                <span className="sus">
-                  {best
-                    ? <>{best.name} · <b>{best.eta_minutes} min</b> · {fmt(best.distance_km)} km</>
-                    : "No asset assigned"}
-                </span>
-                <span className="pct">{fmt(p.priority_score)}</span>
-              </button>
-            );
-          })}
-          <div className="subtle" style={{marginTop: 6, fontSize: 12}}>
-            Priority score ranks spills against each other for response order — it is not a measure of harm
-            caused, oil volume or cost, and excludes shoreline proximity and habitat sensitivity. Skimmer
-            stations are fictional demo assets; ETA is straight-line transit with no routing or sea state.
           </div>
         </div>
       )}

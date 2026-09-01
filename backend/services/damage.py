@@ -27,7 +27,8 @@ What this is NOT:
 """
 import math
 
-from core.config import (ASSUMED_CURRENT_DIRECTION_DEG, ASSUMED_CURRENT_SPEED_MS,
+from core.config import (ADVISORY_ELEVATED_SCORE, ADVISORY_URGENT_SCORE,
+                         ASSUMED_CURRENT_DIRECTION_DEG, ASSUMED_CURRENT_SPEED_MS,
                          ASSUMED_WIND_DIRECTION_DEG, ASSUMED_WIND_SPEED_MS,
                          DAMAGE_WEIGHT_AREA, DAMAGE_WEIGHT_CONFIDENCE,
                          DAMAGE_WEIGHT_VESSEL_SIZE, WIND_DRIFT_FACTOR)
@@ -129,6 +130,31 @@ def priority_score(envelope, confidence, vessel_length_m):
                     "caused, oil volume, or cost."),
         "excluded_factors": ["oil volume", "slick thickness", "shoreline proximity",
                              "habitat sensitivity", "weathering"],
+    }
+
+
+def advisory(score, response_priority=None):
+    """
+    What to tell the authorities, banded off the priority score.
+
+    Deliberately stops at "escalate this, in this order". Naming response
+    assets, crews or arrival times would mean inventing them, and a responder
+    reading a fabricated ETA is worse off than one reading none.
+    """
+    if score >= ADVISORY_URGENT_SCORE:
+        urgency, action = "URGENT", "Notify the maritime pollution authority immediately."
+    elif score >= ADVISORY_ELEVATED_SCORE:
+        urgency, action = "ELEVATED", "Report to the maritime pollution authority for response tasking."
+    else:
+        urgency, action = "ROUTINE", "Log and report to the maritime pollution authority."
+
+    return {
+        "urgency": urgency,
+        "action": action,
+        "response_priority": response_priority,
+        "label": "RECOMMENDED ACTION",
+        "note": ("Escalation advice only. This prototype does not model response "
+                 "assets, crews, availability or arrival times."),
     }
 
 

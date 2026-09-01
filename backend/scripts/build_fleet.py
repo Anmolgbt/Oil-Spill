@@ -37,8 +37,8 @@ import pandas as pd
 BACKEND = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND))
 
-from core.config import (AIS_REFERENCE_FILE, RISK_FORECAST_HOURS, SIMULATION_DIR,
-                         SIMULATION_SEED)
+from core.config import (AIS_REFERENCE_FILE, RISK_FORECAST_HOURS,
+                         RISK_SAFETY_BUFFER_KM, SIMULATION_DIR, SIMULATION_SEED)
 from services.damage import impact_envelope
 from services.geo import angle_diff, bearing_deg, destination, haversine_km
 from services.t3_simulation import CLEAN_POOL_DIR, write_t3_snapshot
@@ -65,26 +65,59 @@ MIN_TRACK_RANGE_KM = 1.5   # excludes vessels that barely moved (e.g. moored)
 #   CROSSING     starts in clear water, but projecting its own recorded course
 #                and speed forward runs it into the zone.
 #   MOVING AWAY  starts clear and never comes near the zone at all.
-NEAR_KM = 15
-NEAR_COUNT = 3
+NEAR_KM = 30
+# Only as many source candidates as can actually leak (T3_OIL_MAX). Every extra
+# one consumes a vessel that would otherwise be traffic — and in this corpus the
+# vessels nearest the anchorage are exactly the ones whose courses converge on
+# it, so taking three sources left nothing to approach the spill.
+NEAR_COUNT = 2
 CROSS_COUNT = 4
 
+# Two vessels leaking on top of each other is one spill drawn twice: the
+# envelopes overlap, the two hindcasts land in the same water, and the response
+# ranking has nothing to tell apart. Sources must therefore be far enough apart
+# that their impact envelopes do not touch — which is a function of the envelope
+# radius, not a fixed number.
+def min_source_separation_km():
+    return 2 * impact_envelope(PASS_INTERVAL_HOURS)["radius_km"] + 2
+
+# Vessels kept out of the demo fleet by name/MMSI. Not a data-quality
+# judgement — just fleet composition for the walkthrough.
+EXCLUDE_MMSI = {
+    636017298,   # KIDAN
+    367441520,   # CAPT NICHOLAS
+}
+
 # CROSSING and MOVING-AWAY vessels must start beyond the spill's own impact
-# envelope, or they are inside it from the first frame and there is no approach
-# to show. The envelope is now sized by services/damage.py from the assumed
-# drift (a few km over one revisit), so 18 km leaves clear water between a
-# vessel and the zone. That standoff is easily covered inside the risk horizon —
-# 6 h at 10 kt is over 100 km of travel — so a vessel heading that way still
-# crosses, which is exactly the approach-and-turn the demo needs to show.
-# (This corpus is spatially concentrated: essentially nothing sits beyond 40 km
-# of the centre, so pushing this much higher starves the CROSSING bucket.)
-FAR_MIN_KM = 18
+# envelope plus the reroute safety buffer, or they are inside the zone from the
+# first frame and there is no approach to show. Derived from the envelope rather
+# than fixed, because the envelope is sized from the assumed drift and the pass
+# interval — a hardcoded standoff silently stops matching when either changes,
+# which is how a 18 km constant tuned for an 11 km envelope ended up excluding
+# every vessel that actually converges on a 5.6 km one.
+def far_min_km():
+    return impact_envelope(PASS_INTERVAL_HOURS)["radius_km"] + RISK_SAFETY_BUFFER_KM
 
 MAX_SEGMENT_GAP_HOURS = 3   # splits a vessel's history into contiguous sessions
 MAX_TRACK_POINTS = 80       # downsample cap per vessel, so the file stays small
 
-PASS_INTERVAL_HOURS = 8
+# Revisit cadence, and the window the three passes span (t1 -> t3).
+#
+# This is 4 h rather than 8 h because of what the corpus actually contains. A
+# vessel only appears to move between passes if its recorded session covers the
+# whole t1..t3 window; at 8 h that window is 16 h, and only 8 vessels in the
+# corpus hold a contiguous 16 h session, which is too few to fill the fleet.
+# The result was every vessel frozen at the same coordinates on t1 and t2. At
+# 4 h the window is 8 h and about 22 vessels qualify, so the fleet genuinely
+# moves between passes. The interval also bounds spill age and therefore the
+# impact envelope, so shortening it shrinks the envelope too.
+PASS_INTERVAL_HOURS = 4
 SNAPSHOT_IDS = ["t1", "t2", "t3"]
+
+# A vessel's session must cover the whole pass window, with margin, or it has
+# no fixes to report on the early passes and sits motionless there.
+PASS_WINDOW_HOURS = PASS_INTERVAL_HOURS * (len(SNAPSHOT_IDS) - 1)
+MIN_SESSION_SPAN_HOURS = PASS_WINDOW_HOURS + 1
 
 # A handful of AIS VesselType codes that show up in this corpus, translated to
 # plain text. Anything else is reported as its raw numeric code rather than
@@ -142,11 +175,14 @@ def vessel_profile(corpus):
         segment = vessel.iloc[start:end]
         if len(segment) < MIN_TRACK_POINTS:
             continue
+        span_hours = ((segment["BaseDateTime"].iloc[-1] - segment["BaseDateTime"].iloc[0])
+                      .total_seconds() / 3600)
         final = segment.iloc[-1]
         first = vessel.iloc[0]
         rows.append({
             "MMSI": mmsi,
             "n": len(segment),
+            "span_hours": span_hours,
             "lat": float(final["LAT"]), "lon": float(final["LON"]),
             "course": float(final["COG"]), "speed_kt": float(final["SOG"]),
             "range_km": haversine_km(segment["LAT"].min(), segment["LON"].min(),
@@ -211,14 +247,28 @@ def select_cluster(corpus):
     """
     profile = vessel_profile(corpus)
     eligible = profile[(profile["dist_km"] <= CLUSTER_RADIUS_KM)
-                       & (profile["range_km"] >= MIN_TRACK_RANGE_KM)]
+                       & (profile["range_km"] >= MIN_TRACK_RANGE_KM)
+                       # Must be reporting across the whole pass window, or the
+                       # vessel is frozen in place on the early passes.
+                       & (profile["span_hours"] >= MIN_SESSION_SPAN_HOURS)
+                       & (~profile["MMSI"].isin(EXCLUDE_MMSI))]
 
     # Spill sources come from identified vessels only — an unnamed, undimensioned
     # contact makes for a poor "who spilled" story and leaves the priority score
-    # with no vessel size to weigh.
+    # with no vessel size to weigh — and must be spread out, so two leaks are
+    # two separate incidents rather than one circle drawn twice.
     near = eligible[(eligible["dist_km"] <= NEAR_KM)
                     & eligible["identified"]].sort_values("dist_km")
-    near_rows = near.head(NEAR_COUNT)
+
+    sources = []
+    for _, row in near.iterrows():
+        if all(haversine_km(row["lat"], row["lon"], s["lat"], s["lon"])
+               >= min_source_separation_km() for s in sources):
+            sources.append(row)
+        if len(sources) >= NEAR_COUNT:
+            break
+
+    near_rows = pd.DataFrame(sources) if sources else near.head(NEAR_COUNT)
     selected = near_rows["MMSI"].tolist()
 
     def clear_of_near(row):
@@ -230,7 +280,7 @@ def select_cluster(corpus):
     rest = eligible[~eligible["MMSI"].isin(selected)].copy()
     rest["clear_km"] = rest.apply(clear_of_near, axis=1)
     rest["approach_km"] = rest.apply(lambda r: _approach_km(r, targets), axis=1)
-    far = rest[rest["clear_km"] >= FAR_MIN_KM]
+    far = rest[rest["clear_km"] >= far_min_km()]
 
     # CROSSING: starts in clear water but its projected track runs into the
     # zone. MOVING AWAY: never comes near it at all.

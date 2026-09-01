@@ -52,7 +52,7 @@ RISK_SAFETY_BUFFER_KM = 3.0
 # up, so the impact envelope in services/damage.py is driven by these stated
 # constants. Swapping in a real met-ocean feed means replacing these values and
 # nothing else. Directions are the compass bearing the flow moves TOWARD.
-ASSUMED_CURRENT_SPEED_MS = 0.25
+ASSUMED_CURRENT_SPEED_MS = 0.5
 ASSUMED_CURRENT_DIRECTION_DEG = 170.0
 ASSUMED_WIND_SPEED_MS = 5.0
 ASSUMED_WIND_DIRECTION_DEG = 200.0
@@ -67,14 +67,10 @@ DAMAGE_WEIGHT_AREA = 0.45
 DAMAGE_WEIGHT_CONFIDENCE = 0.30
 DAMAGE_WEIGHT_VESSEL_SIZE = 0.25
 
-# --- simulated response assets ------------------------------------------------
-# FICTIONAL skimmer stations for the dispatch demo. These are not real
-# facilities and must never be presented as such. Positions are placed around
-# the demo AOI so the "nearest asset" answer differs per spill.
-SKIMMER_TRANSIT_SPEED_KT = 12.0
-SKIMMER_STATIONS = [
-    {"id": "skimmer-a", "name": "Response Cutter ALPHA", "latitude": 28.75, "longitude": -94.62},
-    {"id": "skimmer-b", "name": "Response Cutter BRAVO", "latitude": 28.40, "longitude": -95.05},
-    {"id": "skimmer-c", "name": "Skimmer Barge CHARLIE", "latitude": 28.34, "longitude": -94.55},
-    {"id": "skimmer-d", "name": "Skimmer Barge DELTA", "latitude": 28.72, "longitude": -95.10},
-]
+# --- response advisory --------------------------------------------------------
+# The dashboard reports WHAT needs escalating and in what order; it does not
+# model who responds or with what. Any concrete asset list (skimmers, cutters,
+# ETAs) would be invented, so the output stops at "notify the authority".
+# Priority-score bands used to word that advisory.
+ADVISORY_URGENT_SCORE = 75.0
+ADVISORY_ELEVATED_SCORE = 50.0

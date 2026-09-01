@@ -32,10 +32,10 @@ from .investigation import (HINDCAST_DRIFT_DIRECTION_DEG, HINDCAST_DRIFT_SPEED_K
                             SEARCH_TIME_BEFORE_HOURS, TRAJECTORY_AFTER_HOURS,
                             TRAJECTORY_BEFORE_HOURS, WEIGHT_BEHAVIOUR,
                             WEIGHT_PROXIMITY, WEIGHT_TRAJECTORY, forecast)
-from .damage import drift_vector, impact_envelope, priority_score, rank_spills
+from .damage import (advisory, drift_vector, impact_envelope, priority_score,
+                     rank_spills)
 from .risk import assess_fleet, projected_route, spill_polygons
 from .reroute import suggest_detour
-from .skimmers import dispatch_for, stations as skimmer_stations
 from .snapshots import get_available_snapshots, get_latest_snapshot
 
 FLEET_FILE = SIMULATION_DIR / "fleet.json"
@@ -57,6 +57,22 @@ def _position_at(ship, when):
         return None
     age = (target - parse_time(fix["time"])).total_seconds() / 3600
     return {**fix, "age_hours": round(age, 2)}
+
+
+def _track_until(ship, when):
+    """
+    The vessel's fixes up to and including `when`.
+
+    A pass only knows the AIS history that existed when it was taken. Returning
+    the whole session meant the "where it has been" line ran past the vessel
+    into fixes it had not reached yet, so on an early pass the historic track
+    and the forward projection pointed the same way.
+    """
+    track = ship.get("track") or []
+    if not when:
+        return track
+    target = parse_time(when)
+    return [p for p in track if parse_time(p["time"]) <= target] or track[:1]
 
 
 def _pass_time(fleet, snapshot_id, interval_hours):
@@ -111,7 +127,10 @@ def scan_fleet(snapshot_id=None):
             "speed_kt": fix["speed_kt"] if fix else ship["speed_kt"],
             "course_deg": fix["course_deg"] if fix else ship["course_deg"],
             "position_time": fix["time"] if fix else None,
-            "track": ship.get("track", []),
+            # Only fixes up to THIS pass. At pass time nobody has the vessel's
+            # future AIS, and drawing the whole session made the "past track"
+            # run ahead of the vessel — the same direction as its projection.
+            "track": _track_until(ship, observed_at),
         }
         # Where this vessel is headed next, for every vessel — the map pairs it
         # with the historic track so a click always shows past AND future.
@@ -307,7 +326,6 @@ def run_fleet_scan(snapshot_id=None):
             "wave": None,
             "drift": drift_vector(),
         },
-        "skimmers": skimmer_stations(),
     }
 
     if not scan["oil_detected"]:
@@ -371,8 +389,7 @@ def run_fleet_scan(snapshot_id=None):
         # Vessel size comes from the source vessel's own recorded AIS dimensions.
         spill_entry["damage"] = priority_score(
             spill_entry["affected_area"], det["confidence"], det.get("length_m"))
-        spill_entry["response"] = dispatch_for(
-            det_spill["latitude"], det_spill["longitude"])
+        spill_entry["response"] = advisory(spill_entry["damage"]["priority_score"])
 
         spills.append(spill_entry)
 
@@ -384,6 +401,7 @@ def run_fleet_scan(snapshot_id=None):
     for entry in spills:
         entry["response_priority"] = priority_by_ship.get(
             entry["spill"]["ship_id"], {}).get("response_priority")
+        entry["response"]["response_priority"] = entry["response_priority"]
 
     # The strongest detection also fills the top-level fields.
     primary = spills[0]
