@@ -205,11 +205,17 @@ function App() {
   const [error, setError] = useState("");
   const [fallback, setFallback] = useState(false);
   const [legendOpen, setLegendOpen] = useState(false);
+  // Which spill the map overlays follow. Separate from `selected` (the vessel
+  // in the detail panel): selecting an at-risk vessel used to make the shown
+  // spill fall back to spills[0], which silently swapped the at-risk list and
+  // wiped the detour the user had just clicked in to see.
+  const [focusedSpillId, setFocusedSpillId] = useState<string | null>(null);
 
   const load = async (snapshotId?: string) => {
     setRunning(true);
     setError("");
     setSelected(null);
+    setFocusedSpillId(null);
 
     // 1. live fleet scan  2. stored completed case  3. bundled JSON
     const fleetScan = await runFleetScan(snapshotId);
@@ -286,8 +292,10 @@ function App() {
   const spillFor = (ship: any) =>
     ship ? (scan?.spills || []).find((sp: any) => sp.spill?.ship_id === ship.id) : undefined;
   const sel = spillFor(selected);
-  // Map overlays follow the selected spill, falling back to the strongest detection.
-  const shown = sel || (scan?.spills || [])[0];
+  // Map overlays follow the explicitly focused spill; otherwise the selected
+  // vessel's own spill, otherwise the strongest detection.
+  const shown = (scan?.spills || []).find((sp: any) => sp.spill?.ship_id === focusedSpillId)
+    || sel || (scan?.spills || [])[0];
   const shownSpill = shown?.spill ?? spill;
   const shownSource = shown?.source ?? source;
   const shownArea = shown?.affected_area ?? area;
@@ -300,7 +308,9 @@ function App() {
   // FORWARD RISK — which vessels are projected to enter the spill area next.
   // Kept separate from `candidates` (attribution: who may have caused it,
   // from historic AIS). This looks forward from each vessel's current AIS fix.
-  const shownRisk = shown?.risk;
+  // One fleet-wide list, so a vessel's detour is reachable no matter which
+  // spill is focused.
+  const shownRisk = scan?.risk_overview;
   const riskByShipId = useMemo(
     () => Object.fromEntries((shownRisk?.at_risk || []).map((r: any) => [r.ship_id, r])),
     [shownRisk]
@@ -604,7 +614,10 @@ function App() {
             return (
               <button key={p.ship_id}
                       className={"oilrank " + (selected?.id === p.ship_id ? "selected" : "")}
-                      onClick={() => setSelected(fleet.find((f: any) => f.id === p.ship_id))}>
+                      onClick={() => {
+                        setFocusedSpillId(p.ship_id);
+                        setSelected(fleet.find((f: any) => f.id === p.ship_id));
+                      }}>
                 <span className="pos">
                   {p.response_priority}
                   <i className="dot" style={{background: "#c0261b"}} />
@@ -645,13 +658,16 @@ function App() {
           {shownRisk.at_risk.length ? (
             <>
               <div className="oilhead">
-                <span>#</span><span>Vessel</span><span>Entry / horizon</span>
+                <span>#</span><span>Vessel</span><span>Entry · from spill</span>
                 <span>Detour</span><span>Risk</span>
               </div>
               {shownRisk.at_risk.map((r: any, i: number) => (
                 <button key={r.ship_id}
                         className={"oilrank " + (selected?.id === r.ship_id ? "selected" : "")}
-                        onClick={() => setSelected(fleet.find((f: any) => f.id === r.ship_id))}>
+                        onClick={() => {
+                          setFocusedSpillId(r.spill_ship_id ?? null);
+                          setSelected(fleet.find((f: any) => f.id === r.ship_id));
+                        }}>
                   <span className="pos">
                     {i + 1}
                     <i className="dot" style={{background: "#b8860b"}} />
@@ -661,7 +677,8 @@ function App() {
                     <small>MMSI {r.mmsi}</small>
                   </span>
                   <span className="meta">
-                    ~{r.estimated_entry_minutes} min · of {r.forecast_horizon_hours} h horizon
+                    ~{r.estimated_entry_minutes} min · from <b>{r.spill_ship_name}</b>
+                    {r.response_priority ? ` (${r.response_priority})` : ""}
                   </span>
                   <span className="sus">
                     {r.detour

@@ -24,7 +24,7 @@ from datetime import timedelta
 
 from core.config import (ASSUMED_CURRENT_DIRECTION_DEG, ASSUMED_CURRENT_SPEED_MS,
                          ASSUMED_WIND_DIRECTION_DEG, ASSUMED_WIND_SPEED_MS,
-                         COMPUTED_PROVENANCE, SIMULATION_DIR)
+                         COMPUTED_PROVENANCE, RISK_FORECAST_HOURS, SIMULATION_DIR)
 
 from .geo import haversine_km, parse_time
 from .investigation import (HINDCAST_DRIFT_DIRECTION_DEG, HINDCAST_DRIFT_SPEED_KMH,
@@ -289,6 +289,47 @@ def _affected_area(hours):
     return impact_envelope(hours)
 
 
+def _combined_risk(spills, ships):
+    """
+    One fleet-wide at-risk list, merged across every live spill.
+
+    Each spill assesses the fleet against its own polygons, so a vessel can be
+    flagged twice. Presenting those as separate per-spill lists meant the
+    dashboard showed a different answer depending on which spill happened to be
+    selected — and none at all for a spill that threatens nobody. Here the
+    entries are pooled and deduplicated, keeping the SOONEST threat per vessel,
+    with the spill that causes it named on the row.
+    """
+    worst = {}
+    for entry in spills:
+        spill = entry.get("spill") or {}
+        for at_risk in (entry.get("risk") or {}).get("at_risk", []):
+            row = {**at_risk,
+                   "spill_ship_id": spill.get("ship_id"),
+                   "spill_ship_name": spill.get("ship_name"),
+                   "response_priority": entry.get("response_priority")}
+            current = worst.get(row["ship_id"])
+            if current is None or row["estimated_entry_minutes"] < current["estimated_entry_minutes"]:
+                worst[row["ship_id"]] = row
+
+    at_risk = sorted(worst.values(), key=lambda r: r["estimated_entry_minutes"])
+    source_ids = {s["id"] for s in ships if s.get("oil_detected")}
+
+    return {
+        "label": "FORWARD RISK — SIMULATED PROJECTION",
+        "forecast_horizon_hours": RISK_FORECAST_HOURS,
+        "vessels_checked": len(ships) - len(source_ids),
+        "at_risk_count": len(at_risk),
+        "safe_count": len(ships) - len(source_ids) - len(at_risk),
+        "at_risk": at_risk,
+        "source_ship_ids": sorted(source_ids),
+        "method": ("Every live spill assessed against the whole fleet, pooled and "
+                   "deduplicated to the soonest threat per vessel. Vessels showing "
+                   "oil themselves are excluded — they are the casualty, not "
+                   "traffic to divert."),
+    }
+
+
 def run_fleet_scan(snapshot_id=None):
     """Full monitoring scan over one satellite pass."""
     started = time.perf_counter()
@@ -403,6 +444,8 @@ def run_fleet_scan(snapshot_id=None):
             entry["spill"]["ship_id"], {}).get("response_priority")
         entry["response"]["response_priority"] = entry["response_priority"]
 
+    risk_overview = _combined_risk(spills, scan["ships"])
+
     # The strongest detection also fills the top-level fields.
     primary = spills[0]
     top = scan["detections"][0]
@@ -426,6 +469,7 @@ def run_fleet_scan(snapshot_id=None):
         "forecast": fc,
         "top_suspect": candidates[0] if candidates else None,
         "risk": risk,
+        "risk_overview": risk_overview,
         "damage": primary["damage"],
         "response": primary["response"],
         "response_priorities": priorities,

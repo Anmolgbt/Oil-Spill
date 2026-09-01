@@ -52,13 +52,20 @@ RISK_SAFETY_BUFFER_KM = 3.0
 # up, so the impact envelope in services/damage.py is driven by these stated
 # constants. Swapping in a real met-ocean feed means replacing these values and
 # nothing else. Directions are the compass bearing the flow moves TOWARD.
-ASSUMED_CURRENT_SPEED_MS = 0.5
+ASSUMED_CURRENT_SPEED_MS = 0.25
 ASSUMED_CURRENT_DIRECTION_DEG = 170.0
 ASSUMED_WIND_SPEED_MS = 5.0
 ASSUMED_WIND_DIRECTION_DEG = 200.0
 
 # Standard slick-drift rule of thumb: a surface slick travels with the current
 # plus roughly 3% of the wind speed. Used to size the impact envelope.
+#
+# Keep the current modest. It was briefly raised to 0.5 m/s to make the envelope
+# large enough for a vessel's course to intersect, which backfired: the obstacle
+# the reroute builds (envelope + forecast reach + buffer) grew past 18 km, wider
+# than the fleet's own spread, so every vessel started INSIDE the zone and the
+# map could only ever draw exit routes. A vessel's 6 h projection is 60-100 km
+# long — it does not need a wide zone to intersect one, only to be pointed at it.
 WIND_DRIFT_FACTOR = 0.03
 
 # Weights for the response-priority score (must sum to 1.0). The score ranks

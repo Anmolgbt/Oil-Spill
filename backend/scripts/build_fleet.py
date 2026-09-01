@@ -26,6 +26,7 @@ What it does instead:
 Run from the backend/ directory:
     python scripts/build_fleet.py
 """
+import itertools
 import json
 import shutil
 import sys
@@ -40,6 +41,7 @@ sys.path.insert(0, str(BACKEND))
 from core.config import (AIS_REFERENCE_FILE, RISK_FORECAST_HOURS,
                          RISK_SAFETY_BUFFER_KM, SIMULATION_DIR, SIMULATION_SEED)
 from services.damage import impact_envelope
+from services.investigation import FORECAST_DRIFT_SPEED_KMH
 from services.geo import angle_diff, bearing_deg, destination, haversine_km
 from services.t3_simulation import CLEAN_POOL_DIR, write_t3_snapshot
 
@@ -86,17 +88,24 @@ def min_source_separation_km():
 EXCLUDE_MMSI = {
     636017298,   # KIDAN
     367441520,   # CAPT NICHOLAS
+    369093000,   # KOLT LEVI — the track-quality filter also rejects it (it ran
+                 # 194 km to net 38 km), but the exclusion is explicit so the
+                 # removal holds if those thresholds are ever retuned.
 }
 
-# CROSSING and MOVING-AWAY vessels must start beyond the spill's own impact
-# envelope plus the reroute safety buffer, or they are inside the zone from the
-# first frame and there is no approach to show. Derived from the envelope rather
-# than fixed, because the envelope is sized from the assumed drift and the pass
-# interval — a hardcoded standoff silently stops matching when either changes,
-# which is how a 18 km constant tuned for an 11 km envelope ended up excluding
-# every vessel that actually converges on a 5.6 km one.
+# CROSSING and MOVING-AWAY vessels must start outside the obstacle the reroute
+# actually routes around, or they begin the demo inside the zone and the map can
+# only offer an exit route rather than an approach-and-turn.
+#
+# That obstacle is NOT just the impact envelope: services/reroute.py buffers the
+# union of the envelope AND the forward forecast circles, then circumscribes it.
+# Measured, that comes to ~14 km where the envelope alone is 9 km, which is why
+# a standoff of envelope + buffer still left every vessel inside. Reconstruct
+# the same reach here: envelope + how far the forecast runs + the buffer.
 def far_min_km():
-    return impact_envelope(PASS_INTERVAL_HOURS)["radius_km"] + RISK_SAFETY_BUFFER_KM
+    forecast_reach_km = FORECAST_DRIFT_SPEED_KMH * RISK_FORECAST_HOURS
+    return (impact_envelope(PASS_INTERVAL_HOURS)["radius_km"]
+            + forecast_reach_km + RISK_SAFETY_BUFFER_KM)
 
 MAX_SEGMENT_GAP_HOURS = 3   # splits a vessel's history into contiguous sessions
 MAX_TRACK_POINTS = 80       # downsample cap per vessel, so the file stays small
@@ -118,6 +127,19 @@ SNAPSHOT_IDS = ["t1", "t2", "t3"]
 # no fixes to report on the early passes and sits motionless there.
 PASS_WINDOW_HOURS = PASS_INTERVAL_HOURS * (len(SNAPSHOT_IDS) - 1)
 MIN_SESSION_SPAN_HOURS = PASS_WINDOW_HOURS + 1
+
+# Track legibility. A monitored vessel should read as one coherent voyage:
+# roughly straight, and covering comparable ground between each pass. See
+# _window_quality() for what each term measures.
+TRACK_MAX_WANDER = 2.0      # path travelled / net displacement
+TRACK_MIN_LEG_KM = 1.5      # the shorter pass-to-pass hop
+TRACK_MIN_BALANCE = 0.35    # shorter hop / longer hop
+
+# Real fixes kept BEFORE the displayed window, purely so the grey "where it has
+# been" track is not empty on the first pass. Best effort: a vessel with no
+# earlier history is still fine, and requiring this would shrink the candidate
+# pool below the fleet size.
+LEAD_IN_HOURS = 4
 
 # A handful of AIS VesselType codes that show up in this corpus, translated to
 # plain text. Anything else is reported as its raw numeric code rather than
@@ -159,14 +181,104 @@ def _downsample(rows, cap):
     return [rows[i] for i in indices]
 
 
+def _window_quality(window):
+    """
+    How well one candidate window reads as a coherent voyage.
+
+    * wander  - distance travelled over net displacement. A vessel running a
+                survey or holding pattern racks up kilometres without going
+                anywhere, which draws as a scribble on the map.
+    * min_leg - the shorter of the two pass-to-pass hops. Near zero means the
+                vessel is parked for one pass and then leaps on the next.
+    * balance - shorter hop over longer hop. Low means the same thing.
+
+    None when the window has too few fixes or the vessel never really moved.
+    """
+    if len(window) < 4:
+        return None
+
+    points = list(zip(window["LAT"], window["LON"]))
+    path_km = sum(haversine_km(points[i][0], points[i][1], points[i + 1][0], points[i + 1][1])
+                  for i in range(len(points) - 1))
+    net_km = haversine_km(points[0][0], points[0][1], points[-1][0], points[-1][1])
+    if net_km <= 0.05:
+        return None
+
+    start = window["BaseDateTime"].iloc[0]
+    span = (window["BaseDateTime"].iloc[-1] - start).total_seconds() / 3600
+
+    def at(hours_in):
+        prior = window[window["BaseDateTime"] <= start + timedelta(hours=hours_in)]
+        row = prior.iloc[-1] if len(prior) else window.iloc[0]
+        return row["LAT"], row["LON"]
+
+    first_leg = haversine_km(*at(0), *at(span / 2))
+    second_leg = haversine_km(*at(span / 2), *at(span))
+    longest_leg = max(first_leg, second_leg)
+
+    return {
+        "wander": path_km / net_km,
+        "min_leg_km": min(first_leg, second_leg),
+        "balance": (min(first_leg, second_leg) / longest_leg) if longest_leg > 0 else 0.0,
+    }
+
+
+def _best_window(segment):
+    """
+    The stretch of this vessel's session that the demo should display.
+
+    Showing the LAST hours of a session is what produced both the scribbled
+    tracks and the park-then-leap movement between passes: the end of a
+    session is usually the vessel manoeuvring onto a berth or anchor. Sliding
+    a window over the session and keeping its best-moving stretch instead
+    triples the number of usable vessels at the same pass interval.
+
+    Every coordinate, speed and course stays exactly as recorded — this only
+    chooses WHICH real hours of the voyage to show, in the same spirit as the
+    per-vessel time shift onto the shared demo clock.
+
+    Returns (window_start, window_end, quality).
+    """
+    window = timedelta(hours=PASS_WINDOW_HOURS)
+    times = segment["BaseDateTime"]
+    first, last = times.iloc[0], times.iloc[-1]
+
+    best = None
+    starts = pd.date_range(first, last - window, freq="30min")
+    for start in starts:
+        end = start + window
+        quality = _window_quality(segment[(times >= start) & (times <= end)])
+        if quality is None:
+            continue
+        passes = (quality["wander"] <= TRACK_MAX_WANDER
+                  and quality["min_leg_km"] >= TRACK_MIN_LEG_KM
+                  and quality["balance"] >= TRACK_MIN_BALANCE)
+        # Prefer a window that clears every threshold; among those, one with
+        # real history behind it, so the vessel has a "where it has been" track
+        # on the FIRST pass rather than a bare marker; then the one covering the
+        # most ground. Windows that clear nothing are still scored so the vessel
+        # gets a sensible track before being filtered out.
+        lead_in = min((start - first).total_seconds() / 3600, LEAD_IN_HOURS)
+        score = (passes, lead_in, quality["min_leg_km"])
+        if best is None or score > best[0]:
+            best = (score, start, end, quality)
+
+    if best is None:
+        return last - window, last, None
+    return best[1], best[2], best[3]
+
+
 def vessel_profile(corpus):
     """
     One row per vessel describing the state the demo will actually plot: the
-    LAST fix of the contiguous session build_ship_track() keeps, not the mean of
-    the vessel's whole multi-month history. Selecting on the mean was wrong —
-    a vessel whose average position is 18 km out can finish its session right
-    next to the cluster centre, which is how "far" vessels ended up inside the
-    spill zone on the map.
+    last fix of the window _best_window() picks, not the mean of the vessel's
+    whole multi-month history. Selecting on the mean was wrong — a vessel whose
+    average position is 18 km out can finish right next to the cluster centre,
+    which is how "far" vessels ended up inside the spill zone on the map.
+
+    The chosen window bounds travel with the row so build_ship_track() displays
+    exactly the stretch that was selected on. Deriving them twice is what let
+    selection and display disagree before.
     """
     rows = []
     for mmsi, vessel in corpus.groupby("MMSI"):
@@ -177,16 +289,28 @@ def vessel_profile(corpus):
             continue
         span_hours = ((segment["BaseDateTime"].iloc[-1] - segment["BaseDateTime"].iloc[0])
                       .total_seconds() / 3600)
-        final = segment.iloc[-1]
+        if span_hours < MIN_SESSION_SPAN_HOURS:
+            continue
+
+        win_start, win_end, quality = _best_window(segment)
+        if quality is None:
+            continue
+        window = segment[(segment["BaseDateTime"] >= win_start)
+                         & (segment["BaseDateTime"] <= win_end)]
+        final = window.iloc[-1]
         first = vessel.iloc[0]
         rows.append({
             "MMSI": mmsi,
             "n": len(segment),
             "span_hours": span_hours,
+            "win_start": win_start, "win_end": win_end,
+            "wander": quality["wander"],
+            "min_leg_km": quality["min_leg_km"],
+            "balance": quality["balance"],
             "lat": float(final["LAT"]), "lon": float(final["LON"]),
             "course": float(final["COG"]), "speed_kt": float(final["SOG"]),
-            "range_km": haversine_km(segment["LAT"].min(), segment["LON"].min(),
-                                      segment["LAT"].max(), segment["LON"].max()),
+            "range_km": haversine_km(window["LAT"].min(), window["LON"].min(),
+                                      window["LAT"].max(), window["LON"].max()),
             # A vessel the corpus actually identifies: named, typed and
             # dimensioned. The spill sources are picked from these so the demo
             # names a real vessel, and so the response-priority score has a
@@ -234,6 +358,46 @@ def _approach_km(row, targets):
     return best
 
 
+def _pick_sources(eligible):
+    """
+    Choose which vessels leak.
+
+    NOT simply the ones nearest the cluster centre. Where the sources sit
+    decides how much of the rest of the fleet starts in clear water: putting
+    them in the middle of the anchorage left every other vessel inside the
+    impact envelope, so the map could only ever show exit routes and never a
+    vessel approaching and turning away.
+
+    So score every admissible pair by how much CROSSING traffic it leaves —
+    vessels that begin outside the zone and whose own recorded course runs them
+    into it — and take the best. Sources must still be identified (named, typed
+    and dimensioned) and far enough apart that their envelopes do not touch.
+    """
+    identified = eligible[eligible["identified"]]
+    separation = min_source_separation_km()
+    envelope_km = impact_envelope(PASS_INTERVAL_HOURS)["radius_km"]
+
+    best = None
+    for pair in itertools.combinations(identified.itertuples(index=False), NEAR_COUNT):
+        if any(haversine_km(a.lat, a.lon, b.lat, b.lon) < separation
+               for a, b in itertools.combinations(pair, 2)):
+            continue
+        targets = [{"lat": p.lat, "lon": p.lon} for p in pair]
+        others = eligible[~eligible["MMSI"].isin([p.MMSI for p in pair])]
+        clear = others.apply(
+            lambda r: min(haversine_km(r["lat"], r["lon"], t["lat"], t["lon"])
+                          for t in targets), axis=1)
+        approach = others.apply(lambda r: _approach_km(r, targets), axis=1)
+        far = clear >= far_min_km()
+        score = (int((far & (approach <= envelope_km * 2)).sum()), int(far.sum()))
+        if best is None or score > best[0]:
+            best = (score, pair)
+
+    if best is None:      # no admissible pair — fall back to the most central
+        return identified.sort_values("dist_km").head(NEAR_COUNT)
+    return pd.DataFrame(list(best[1]))
+
+
 def select_cluster(corpus):
     """
     ~FLEET_SIZE real vessels split into NEAR / CROSSING / MOVING AWAY by the
@@ -248,27 +412,14 @@ def select_cluster(corpus):
     profile = vessel_profile(corpus)
     eligible = profile[(profile["dist_km"] <= CLUSTER_RADIUS_KM)
                        & (profile["range_km"] >= MIN_TRACK_RANGE_KM)
-                       # Must be reporting across the whole pass window, or the
-                       # vessel is frozen in place on the early passes.
-                       & (profile["span_hours"] >= MIN_SESSION_SPAN_HOURS)
+                       # Reads as one coherent voyage rather than a scribble,
+                       # and covers comparable ground between each pass.
+                       & (profile["wander"] <= TRACK_MAX_WANDER)
+                       & (profile["min_leg_km"] >= TRACK_MIN_LEG_KM)
+                       & (profile["balance"] >= TRACK_MIN_BALANCE)
                        & (~profile["MMSI"].isin(EXCLUDE_MMSI))]
 
-    # Spill sources come from identified vessels only — an unnamed, undimensioned
-    # contact makes for a poor "who spilled" story and leaves the priority score
-    # with no vessel size to weigh — and must be spread out, so two leaks are
-    # two separate incidents rather than one circle drawn twice.
-    near = eligible[(eligible["dist_km"] <= NEAR_KM)
-                    & eligible["identified"]].sort_values("dist_km")
-
-    sources = []
-    for _, row in near.iterrows():
-        if all(haversine_km(row["lat"], row["lon"], s["lat"], s["lon"])
-               >= min_source_separation_km() for s in sources):
-            sources.append(row)
-        if len(sources) >= NEAR_COUNT:
-            break
-
-    near_rows = pd.DataFrame(sources) if sources else near.head(NEAR_COUNT)
+    near_rows = _pick_sources(eligible)
     selected = near_rows["MMSI"].tolist()
 
     def clear_of_near(row):
@@ -310,22 +461,31 @@ def select_cluster(corpus):
             if len(selected) >= FLEET_SIZE:
                 break
 
-    return selected[:FLEET_SIZE]
+    # Carry each vessel's chosen window along with it, so the track built later
+    # is the same stretch that was selected on.
+    windows = profile.set_index("MMSI")[["win_start", "win_end"]]
+    return {m: (windows.loc[m, "win_start"], windows.loc[m, "win_end"])
+            for m in selected[:FLEET_SIZE]}
 
 
-def build_ship_track(vessel_rows, track_end):
-    """The vessel's longest contiguous real session, downsampled and re-indexed
-    onto the demo clock ending at `track_end`. lat/lon/speed/course are the
-    corpus's own recorded values, verbatim."""
+def build_ship_track(vessel_rows, track_end, win_start, win_end):
+    """
+    The window _best_window() chose for this vessel, plus up to LEAD_IN_HOURS of
+    real fixes before it as trailing history, downsampled and re-indexed so the
+    window's end lands on `track_end` (the latest pass).
+
+    lat/lon/speed/course are the corpus's own recorded values, verbatim.
+    """
     vessel_rows = vessel_rows.sort_values("BaseDateTime").reset_index(drop=True)
-    times = list(vessel_rows["BaseDateTime"])
-    start, end = _longest_contiguous_segment(times)
-    segment = vessel_rows.iloc[start:end]
+    times = vessel_rows["BaseDateTime"]
+    shown = vessel_rows[(times >= win_start - timedelta(hours=LEAD_IN_HOURS))
+                        & (times <= win_end)]
 
-    rows = segment.to_dict("records")
-    rows = _downsample(rows, MAX_TRACK_POINTS)
+    rows = _downsample(shown.to_dict("records"), MAX_TRACK_POINTS)
 
-    shift = track_end - rows[-1]["BaseDateTime"]
+    # Anchor the WINDOW end to the pass, not the lead-in, so t1..t3 lands on the
+    # stretch that was selected for its movement.
+    shift = track_end - win_end
     track = [{
         "time": (r["BaseDateTime"] + shift).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "lat": round(float(r["LAT"]), 5), "lon": round(float(r["LON"]), 5),
@@ -336,7 +496,8 @@ def build_ship_track(vessel_rows, track_end):
 
 def build_fleet():
     corpus = pd.read_csv(AIS_REFERENCE_FILE, parse_dates=["BaseDateTime"])
-    mmsis = select_cluster(corpus)
+    windows = select_cluster(corpus)
+    mmsis = list(windows)
     if len(mmsis) < FLEET_SIZE:
         print(f"warning: only {len(mmsis)} vessels matched the cluster filters "
               f"(wanted {FLEET_SIZE})")
@@ -351,7 +512,8 @@ def build_fleet():
     ships = []
     for i, mmsi in enumerate(mmsis, start=1):
         rows = corpus[corpus["MMSI"] == mmsi]
-        track = build_ship_track(rows, last_pass)
+        win_start, win_end = windows[mmsi]
+        track = build_ship_track(rows, last_pass, win_start, win_end)
         last = track[-1]
         first_row = rows.iloc[0]
         ships.append({
