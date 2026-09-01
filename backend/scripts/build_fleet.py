@@ -1,170 +1,211 @@
 """
-Build the monitored fleet and fill the earlier satellite passes.
+Build the monitored fleet from the REAL AIS corpus.
 
-FLEET DATA IS SYNTHETIC. The bundled AIS corpus (data/ais_reference/) is US Gulf
-of Mexico traffic and contains no Indian-flag vessels, so an Indian fleet cannot
-be drawn from it. These five vessels, their MMSIs, names and tracks are invented
-for the demo AOI off the Gujarat coast. What stays real:
+Earlier drafts of this demo invented a Gujarat fleet because the bundled AIS
+corpus (data/ais_reference/ais_dataset.csv) is US Gulf of Mexico traffic. That
+was flagged as a problem: it rewrote real Gulf coordinates and presented them
+as if they were Indian-flag vessels. This script no longer does that.
 
-* the CNN classifies real Sentinel-1 SAR tiles;
-* the Isolation Forest genuinely scores these tracks - the behaviour scores are
-  real model output over synthetic input, not hand-written numbers;
-* the anomaly 0-100 scale is still normalised against the real AIS corpus.
+What it does instead:
 
-Routes are straight transits at constant course so the map reads clearly, with
-one vessel making a course change and slowdown mid-window. That manoeuvre is
-generated, but the anomaly score it earns is the model's own verdict.
-
-Satellite passes are 8 h apart, which is also what bounds the spill age: a tile
-that was clean on the previous pass and oily on this one holds oil at most one
-revisit old.
+* Selects a geographically tight cluster of ~30 REAL vessels from the corpus
+  (real MMSI, real name/type where recorded, real lat/lon/speed/course).
+* For each vessel, keeps its longest contiguous AIS session (no big time gaps)
+  so the track reads as one continuous voyage on the map, downsampled to a
+  sane number of fixes rather than dumping the vessel's entire multi-month
+  history.
+* Re-indexes each vessel's own timestamps onto a shared demo clock (three
+  satellite passes, t1/t2/t3, PASS_INTERVAL_HOURS apart) so the fleet can be
+  "observed" together. The SHIFT is a constant offset per vessel — the actual
+  recorded order, spacing, speed and course between fixes are untouched. This
+  is a scheduling artefact of the demo, not an invented position.
+* Builds real, all-clean SAR tiles for t1 and t2, and hands t3 to the seeded
+  simulation in services/t3_simulation.py, which decides which vessels (if
+  any) get an oil-positive tile — never this script and never the CNN.
 
 Run from the backend/ directory:
     python scripts/build_fleet.py
 """
 import json
+import shutil
 import sys
-import urllib.parse
-import urllib.request
-from datetime import datetime, timedelta, timezone
-from math import cos, radians, sin
+from datetime import timedelta
 from pathlib import Path
+
+import pandas as pd
 
 BACKEND = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND))
 
-from core.config import SIMULATION_DIR
+from core.config import AIS_REFERENCE_FILE, SIMULATION_DIR, SIMULATION_SEED
+from services.geo import haversine_km
+from services.t3_simulation import CLEAN_POOL_DIR, write_t3_snapshot
 
 FLEET_FILE = SIMULATION_DIR / "fleet.json"
 SNAPSHOTS_DIR = SIMULATION_DIR / "snapshots"
 
-# Satellite revisit cadence. Also the age bound for a newly-appeared spill.
+FLEET_SIZE = 30
+# A real, historically busy patch of Gulf traffic. This is only used to pick a
+# geographically tight CLUSTER out of the corpus — the vessels' own recorded
+# coordinates are what gets used everywhere downstream.
+CLUSTER_CENTER_LAT = 28.57
+CLUSTER_CENTER_LON = -94.80
+CLUSTER_RADIUS_KM = 20
+MIN_TRACK_POINTS = 30
+MIN_TRACK_RANGE_KM = 1.5   # excludes vessels that barely moved (e.g. moored)
+
+MAX_SEGMENT_GAP_HOURS = 3   # splits a vessel's history into contiguous sessions
+MAX_TRACK_POINTS = 80       # downsample cap per vessel, so the file stays small
+
 PASS_INTERVAL_HOURS = 8
-FIRST_PASS = datetime(2026, 3, 14, 6, 0, tzinfo=timezone.utc)
-SNAPSHOT_IDS = ["t0", "t1", "t2"]
+SNAPSHOT_IDS = ["t1", "t2", "t3"]
 
-AIS_INTERVAL_MIN = 15
-KM_PER_DEG_LAT = 110.574
-KT_TO_KMH = 1.852
-
-
-def km_per_deg_lon(lat):
-    return 111.320 * cos(radians(lat))
-
-
-# Arabian Sea, off the Saurashtra / Gujarat coast. Start points are spread so the
-# vessels stay tens of km apart instead of overlapping on the map.
-# Start points sit inshore of the AOI and every course heads out to open sea, so
-# no track ever runs onto the Saurashtra coast.
-#  id,     mmsi,      name,              type,            lat,   lon,   course, kt,  event
-FLEET = [
-    ("ship1", 419001234, "MV Sagar Deep",     "Crude Oil Tanker", 21.90, 68.60, 250, 11.5, None),
-    ("ship2", 419002345, "MT Kandla Pride",   "Product Tanker",   21.30, 69.90, 215, 9.8,  None),
-    ("ship3", 419003456, "MV Gujarat Star",   "Bulk Carrier",     20.40, 70.60, 260, 12.6, None),
-    ("ship4", 419004567, "MT Okha Voyager",   "Chemical Tanker",  19.90, 68.20, 300, 10.4, None),
-    ("ship5", 419005678, "MV Dwarka Prime",   "Crude Oil Tanker", 20.95, 69.25, 235, 8.6,  "turn_and_slow"),
-]
+# A handful of AIS VesselType codes that show up in this corpus, translated to
+# plain text. Anything else is reported as its raw numeric code rather than
+# guessed.
+VESSEL_TYPE_NAMES = {
+    30: "Fishing", 31: "Towing", 32: "Towing (large)", 35: "Military",
+    36: "Sailing", 37: "Pleasure Craft", 52: "Tug",
+    60: "Passenger", 70: "Cargo", 71: "Cargo — Hazardous A", 79: "Cargo",
+    80: "Tanker", 81: "Tanker — Hazardous A", 89: "Tanker",
+    90: "Other",
+}
 
 
-def _track(lat, lon, course, speed_kt, event, start, hours):
-    """Straight transit at constant course, optionally with one manoeuvre."""
-    steps = int(hours * 60 / AIS_INTERVAL_MIN) + 1
-    turn_at = steps // 2
-    points = []
-    for i in range(steps):
-        when = start + timedelta(minutes=AIS_INTERVAL_MIN * i)
-        if event == "turn_and_slow" and i >= turn_at:
-            # Course change then near-stop: the vessel loiters instead of
-            # transiting. A realistic discharge profile, and a clear behavioural
-            # break for the anomaly model - whatever score it earns is the
-            # model's own verdict, not a set value.
-            crs, spd = (course + 46) % 360, 1.4
-        else:
-            crs, spd = course, speed_kt
+def vessel_type_name(code):
+    if pd.isna(code):
+        return "Unknown"
+    code = int(code)
+    return VESSEL_TYPE_NAMES.get(code, f"Type {code}")
 
-        points.append({
-            "time": when.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "lat": round(lat, 5), "lon": round(lon, 5),
-            "speed_kt": round(spd, 1), "course_deg": round(float(crs), 1),
-        })
 
-        leg = spd * KT_TO_KMH * (AIS_INTERVAL_MIN / 60)
-        lat += leg * cos(radians(crs)) / KM_PER_DEG_LAT
-        lon += leg * sin(radians(crs)) / km_per_deg_lon(lat)
-    return points
+def _longest_contiguous_segment(times):
+    """Indices of the longest run with no gap wider than MAX_SEGMENT_GAP_HOURS."""
+    gap = timedelta(hours=MAX_SEGMENT_GAP_HOURS)
+    best_start = best_len = 0
+    start = 0
+    for i in range(1, len(times) + 1):
+        if i == len(times) or times[i] - times[i - 1] > gap:
+            if i - start > best_len:
+                best_start, best_len = start, i - start
+            start = i
+    return best_start, best_start + best_len
+
+
+def _downsample(rows, cap):
+    if len(rows) <= cap:
+        return rows
+    step = (len(rows) - 1) / (cap - 1)
+    indices = sorted({round(i * step) for i in range(cap)})
+    return [rows[i] for i in indices]
+
+
+def select_cluster(corpus):
+    """~FLEET_SIZE real vessels clustered near CLUSTER_CENTER, with enough
+    history and enough movement to read as a real route on the map."""
+    stats = corpus.groupby("MMSI").agg(
+        n=("MMSI", "size"),
+        lat=("LAT", "mean"), lon=("LON", "mean"),
+        latmin=("LAT", "min"), latmax=("LAT", "max"),
+        lonmin=("LON", "min"), lonmax=("LON", "max"),
+    ).reset_index()
+    stats["dist_km"] = stats.apply(
+        lambda r: haversine_km(CLUSTER_CENTER_LAT, CLUSTER_CENTER_LON, r["lat"], r["lon"]), axis=1)
+    stats["range_km"] = stats.apply(
+        lambda r: haversine_km(r["latmin"], r["lonmin"], r["latmax"], r["lonmax"]), axis=1)
+
+    eligible = stats[(stats["n"] >= MIN_TRACK_POINTS)
+                      & (stats["dist_km"] <= CLUSTER_RADIUS_KM)
+                      & (stats["range_km"] >= MIN_TRACK_RANGE_KM)]
+    eligible = eligible.sort_values("dist_km")
+    return eligible.head(FLEET_SIZE)["MMSI"].tolist()
+
+
+def build_ship_track(vessel_rows, track_end):
+    """The vessel's longest contiguous real session, downsampled and re-indexed
+    onto the demo clock ending at `track_end`. lat/lon/speed/course are the
+    corpus's own recorded values, verbatim."""
+    vessel_rows = vessel_rows.sort_values("BaseDateTime").reset_index(drop=True)
+    times = list(vessel_rows["BaseDateTime"])
+    start, end = _longest_contiguous_segment(times)
+    segment = vessel_rows.iloc[start:end]
+
+    rows = segment.to_dict("records")
+    rows = _downsample(rows, MAX_TRACK_POINTS)
+
+    shift = track_end - rows[-1]["BaseDateTime"]
+    track = [{
+        "time": (r["BaseDateTime"] + shift).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "lat": round(float(r["LAT"]), 5), "lon": round(float(r["LON"]), 5),
+        "speed_kt": round(float(r["SOG"]), 1), "course_deg": round(float(r["COG"]), 1),
+    } for r in rows]
+    return track
 
 
 def build_fleet():
+    corpus = pd.read_csv(AIS_REFERENCE_FILE, parse_dates=["BaseDateTime"])
+    mmsis = select_cluster(corpus)
+    if len(mmsis) < FLEET_SIZE:
+        print(f"warning: only {len(mmsis)} vessels matched the cluster filters "
+              f"(wanted {FLEET_SIZE})")
+
+    last_pass = corpus["BaseDateTime"].max()
     snapshot_times = {
-        sid: (FIRST_PASS + timedelta(hours=PASS_INTERVAL_HOURS * i)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        sid: (last_pass - timedelta(hours=PASS_INTERVAL_HOURS * (len(SNAPSHOT_IDS) - 1 - i)))
+        .strftime("%Y-%m-%dT%H:%M:%SZ")
         for i, sid in enumerate(SNAPSHOT_IDS)
     }
-    # Tracks cover the newest pass back through the hindcast window and its
-    # search margin — enough for the investigation, short enough that vessels
-    # stay inside the AOI instead of transiting hundreds of km off the map.
-    track_hours = 14
-    last_pass = FIRST_PASS + timedelta(hours=PASS_INTERVAL_HOURS * (len(SNAPSHOT_IDS) - 1))
-    track_start = last_pass - timedelta(hours=track_hours)
 
     ships = []
-    for ship_id, mmsi, name, vtype, lat, lon, course, speed, event in FLEET:
-        track = _track(lat, lon, course, speed, event, track_start, track_hours)
+    for i, mmsi in enumerate(mmsis, start=1):
+        rows = corpus[corpus["MMSI"] == mmsi]
+        track = build_ship_track(rows, last_pass)
         last = track[-1]
+        first_row = rows.iloc[0]
         ships.append({
-            "id": ship_id, "mmsi": mmsi, "name": name, "vessel_type": vtype,
-            "image_filename": f"{ship_id}.jpg",
+            "id": f"ship{i}",
+            "mmsi": int(mmsi),
+            "name": (first_row["VesselName"] if pd.notna(first_row["VesselName"])
+                     else f"VESSEL {mmsi}"),
+            "vessel_type": vessel_type_name(first_row["VesselType"]),
+            "image_filename": f"ship{i}.jpg",
             "latitude": last["lat"], "longitude": last["lon"],
             "speed_kt": last["speed_kt"], "course_deg": last["course_deg"],
             "track_points": len(track), "track": track,
         })
 
     return {
-        "note": ("SYNTHETIC FLEET. Vessel identities and tracks are invented for the "
-                 "Gujarat demo AOI; the bundled AIS corpus is US Gulf traffic and has "
-                 "no Indian-flag vessels. Behaviour scores are still produced by the "
-                 "trained Isolation Forest running over these tracks."),
-        "synthetic": True,
-        "region": "Arabian Sea — off the Gujarat coast (demo AOI)",
+        "note": ("REAL AIS FLEET. Vessel identities, MMSIs, coordinates, speed and "
+                 "course are taken as recorded in data/ais_reference/ais_dataset.csv "
+                 "(Gulf of Mexico traffic) — nothing is invented. Each vessel's own "
+                 "recorded timestamps are shifted by a constant per-vessel offset "
+                 "onto a shared 3-pass demo clock (t1/t2/t3); the recorded order, "
+                 "spacing, speed and course between fixes are untouched."),
+        "synthetic": False,
+        "coordinates_source": "real_ais",
+        "region": "Gulf of Mexico — real AIS traffic cluster (demo AOI)",
         "pass_interval_hours": PASS_INTERVAL_HOURS,
-        "ais_interval_minutes": AIS_INTERVAL_MIN,
         "snapshot_times": snapshot_times,
+        "simulation_seed": SIMULATION_SEED,
         "ships": ships,
     }
 
 
-# --- real SAR tiles for the clean passes -------------------------------------
+def fill_clean_snapshots(ships, passes=("t1", "t2")):
+    """t1 and t2: every ship gets a real 'no oil' tile. A small local pool is
+    reused across ships (referenced, not endlessly re-downloaded/duplicated)."""
+    pool = sorted(CLEAN_POOL_DIR.glob("*.jpg"))
+    if not pool:
+        raise FileNotFoundError(f"No clean tiles under {CLEAN_POOL_DIR}")
 
-RAW_BASE = ("https://raw.githubusercontent.com/Saisamarth21/"
-            "Oil-Spill-Detection-in-Marine-Environments-Using-AIS-and-Satellite-Data/main")
-TREE_API = ("https://api.github.com/repos/Saisamarth21/"
-            "Oil-Spill-Detection-in-Marine-Environments-Using-AIS-and-Satellite-Data/"
-            "git/trees/main?recursive=1")
-
-
-def _clean_tile_paths(limit):
-    with urllib.request.urlopen(TREE_API, timeout=60) as resp:
-        tree = json.load(resp)["tree"]
-    paths = sorted(t["path"] for t in tree
-                   if t["type"] == "blob" and t["path"].startswith("SAR Image Dataset/0/"))
-    stride = max(1, len(paths) // limit)
-    return [paths[i * stride] for i in range(limit)]
-
-
-def fill_clean_snapshots(passes=("t0", "t1")):
-    """Real 'no oil' SAR tiles for the earlier passes. t2 is never touched."""
-    needed = len(FLEET) * len(passes)
-    print(f"  fetching {needed} clean SAR tiles...")
-    paths = _clean_tile_paths(needed)
-    i = 0
     for snapshot in passes:
         folder = SNAPSHOTS_DIR / snapshot
         folder.mkdir(parents=True, exist_ok=True)
-        for ship in FLEET:
-            url = f"{RAW_BASE}/{urllib.parse.quote(paths[i])}"
-            with urllib.request.urlopen(url, timeout=60) as resp:
-                (folder / f"{ship[0]}.jpg").write_bytes(resp.read())
-            i += 1
-        print(f"  {snapshot}: {len(FLEET)} real SAR tiles written")
+        for i, ship in enumerate(ships):
+            source = pool[i % len(pool)]
+            shutil.copyfile(source, folder / ship["image_filename"])
+        print(f"  {snapshot}: {len(ships)} real no-oil SAR tiles written "
+              f"(from a {len(pool)}-image pool)")
 
 
 def main():
@@ -172,12 +213,17 @@ def main():
     FLEET_FILE.write_text(json.dumps(fleet, indent=1))
     print(f"wrote {FLEET_FILE}")
     for s in fleet["ships"]:
-        print(f"  {s['id']}  {s['name']:18} MMSI {s['mmsi']}  "
+        print(f"  {s['id']}  {s['name']:20} MMSI {s['mmsi']}  "
               f"{s['latitude']:.3f},{s['longitude']:.3f}  {s['track_points']} fixes")
     print("passes:", fleet["snapshot_times"])
 
     if "--skip-images" not in sys.argv:
-        fill_clean_snapshots()
+        fill_clean_snapshots(fleet["ships"])
+        assignments = write_t3_snapshot(fleet["ships"])
+        oil_ships = [a["ship_id"] for a in assignments
+                     if a["ground_truth_for_simulation"] == "oil"]
+        print(f"  t3: {len(assignments)} tiles written, seed={fleet['simulation_seed']}, "
+              f"oil-positive (ground truth, debug only): {oil_ships}")
     print("Done.")
 
 

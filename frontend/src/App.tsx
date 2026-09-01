@@ -149,6 +149,16 @@ function App() {
   const envelope = detected && shownSpill && shownArea?.radius_km
     ? ring(shownSpill.latitude, shownSpill.longitude, shownArea.radius_km) : null;
 
+  // FORWARD RISK — which vessels are projected to enter the spill area next.
+  // Kept separate from `candidates` (attribution: who may have caused it,
+  // from historic AIS). This looks forward from each vessel's current AIS fix.
+  const shownRisk = shown?.risk;
+  const riskByShipId = useMemo(
+    () => Object.fromEntries((shownRisk?.at_risk || []).map((r: any) => [r.ship_id, r])),
+    [shownRisk]
+  );
+  const selectedRisk = selected ? riskByShipId[selected.id] : undefined;
+
   if (!scan && !error) return <div className="loading">Loading OILTRACE…</div>;
   if (error) return <div className="loading">{error}</div>;
 
@@ -305,6 +315,29 @@ function App() {
               </>
             )}
 
+            {/* FORWARD RISK: selected vessel's projected track and, if it
+                intersects the spill, the simulated detour. Separate concept
+                from attribution — this is forward-looking, not historic. */}
+            {selectedRisk && (
+              <>
+                <Polyline
+                  positions={selectedRisk.projected_route.map((p: any) => [p.latitude, p.longitude] as [number, number])}
+                  pathOptions={{color: "#c0261b", weight: 2.5, dashArray: "1 6", opacity: .9}}>
+                  <Tooltip>{selected.name} · projected track (kinematic, {selectedRisk.forecast_horizon_hours} h)<br />Not a navigational prediction</Tooltip>
+                </Polyline>
+                {selectedRisk.detour && (
+                  <Polyline
+                    positions={selectedRisk.detour.detour_waypoints.map((p: any) => [p.latitude, p.longitude] as [number, number])}
+                    pathOptions={{color: "#1a8a4a", weight: 3, dashArray: "6 4", opacity: .95}}>
+                    <Tooltip>{selected.name} · SIMULATED ROUTE AVOIDANCE<br />
+                      {fmt(selectedRisk.detour.original_heading_deg, 0)}° → {fmt(selectedRisk.detour.suggested_heading_deg, 0)}°
+                      ({selectedRisk.detour.heading_change_deg > 0 ? "+" : ""}{fmt(selectedRisk.detour.heading_change_deg, 0)}°)<br />
+                      Demo only — not navigation guidance</Tooltip>
+                  </Polyline>
+                )}
+              </>
+            )}
+
             {/* track of the selected vessel only, to keep the map readable */}
             {selected?.track?.length > 1 && (
               <Polyline positions={selected.track.map((p: any) => [p.lat, p.lon] as [number, number])}
@@ -313,26 +346,33 @@ function App() {
               </Polyline>
             )}
 
-            {/* monitored vessels */}
-            {fleet.map((s: any) => (
-              <CircleMarker
-                key={s.id}
-                center={[s.latitude, s.longitude]}
-                radius={s.oil_detected ? 10 : 6}
-                pathOptions={{
-                  color: s.oil_detected ? "#c0261b" : "#0b5cab",
-                  fillColor: s.oil_detected ? "#e2554a" : "#5b9bd8",
-                  fillOpacity: selected?.id === s.id ? 1 : .8,
-                  weight: selected?.id === s.id ? 4 : 2,
-                }}
-                eventHandlers={{click: () => setSelected(s)}}
-              >
-                <Tooltip>
-                  <b>{s.name}</b><br />MMSI {s.mmsi}<br />
-                  {s.status}{s.confidence ? ` · ${showPct(s.confidence)}` : ""}
-                </Tooltip>
-              </CircleMarker>
-            ))}
+            {/* monitored vessels — an amber ring marks a vessel FORWARD RISK
+                flagged as projected to enter the spill area (separate from
+                the oil-detected red fill, which is the CNN's own call). */}
+            {fleet.map((s: any) => {
+              const atRisk = riskByShipId[s.id];
+              return (
+                <CircleMarker
+                  key={s.id}
+                  center={[s.latitude, s.longitude]}
+                  radius={s.oil_detected ? 10 : atRisk ? 8 : 6}
+                  pathOptions={{
+                    color: s.oil_detected ? "#c0261b" : atRisk ? "#b8860b" : "#0b5cab",
+                    fillColor: s.oil_detected ? "#e2554a" : "#5b9bd8",
+                    fillOpacity: selected?.id === s.id ? 1 : .8,
+                    weight: selected?.id === s.id ? 4 : (atRisk ? 3 : 2),
+                    dashArray: atRisk && !s.oil_detected ? "3 2" : undefined,
+                  }}
+                  eventHandlers={{click: () => setSelected(s)}}
+                >
+                  <Tooltip>
+                    <b>{s.name}</b><br />MMSI {s.mmsi}<br />
+                    {s.status}{s.confidence ? ` · ${showPct(s.confidence)}` : ""}
+                    {atRisk && <><br /><b>AT RISK</b> · entry ~{atRisk.estimated_entry_minutes} min</>}
+                  </Tooltip>
+                </CircleMarker>
+              );
+            })}
 
             {legendOpen && <div className="legend">
               <b>LEGEND</b>
@@ -342,6 +382,8 @@ function App() {
               {detected && <span><i style={{width: 18, height: 0, borderTop: "3px solid #b45309"}} />Where the oil drifted from ({show(source?.hours_backward)} h)</span>}
               {detected && <span><i style={{width: 18, height: 0, borderTop: "2px dotted #0b5cab"}} />Where it will drift next (48 h)</span>}
               {detected && <span><i style={{width: 18, height: 0, borderTop: "1px dashed #c0261b"}} />Possible affected area</span>}
+              {detected && <span><i style={{width: 10, height: 10, borderRadius: "50%", border: "2px dashed #b8860b", display: "inline-block"}} />Vessel at risk (forward projection)</span>}
+              {detected && <span><i style={{width: 18, height: 0, borderTop: "3px dashed #1a8a4a"}} />Simulated detour (demo only)</span>}
             </div>}
             <button className={"legendbtn" + (legendOpen ? " open" : "")}
                     onClick={() => setLegendOpen((v) => !v)}
@@ -368,6 +410,7 @@ function App() {
             <div className="eyebrow">
               VESSEL DETAIL
               {selected?.oil_detected && <Badge tone="red">OIL DETECTED</Badge>}
+              {selectedRisk && <Badge tone="amber">AT RISK</Badge>}
             </div>
             {selected ? (
               <>
@@ -486,6 +529,58 @@ function App() {
           })}
           <div className="subtle" style={{marginTop: 6, fontSize: 12}}>
             Analytical association with an estimated source window — not proof of responsibility.
+          </div>
+        </div>
+      )}
+
+      {/* ---------------- forward risk: vessels projected to enter the spill ---------------- */}
+      {detected && shownRisk && (
+        <div className="oilstrip">
+          <div className="eyebrow">
+            VESSELS AT RISK <Badge tone="amber">FORWARD PROJECTION</Badge>
+            <span style={{marginLeft: "auto", textTransform: "none", letterSpacing: 0}}>
+              {shownRisk.at_risk_count} of {shownRisk.vessels_checked} projected to enter · {shownRisk.safe_count} safe
+            </span>
+          </div>
+          {shownRisk.at_risk.length ? (
+            <>
+              <div className="oilhead">
+                <span>#</span><span>Vessel</span><span>Entry / horizon</span>
+                <span>Detour</span><span>Risk</span>
+              </div>
+              {shownRisk.at_risk.map((r: any, i: number) => (
+                <button key={r.ship_id}
+                        className={"oilrank " + (selected?.id === r.ship_id ? "selected" : "")}
+                        onClick={() => setSelected(fleet.find((f: any) => f.id === r.ship_id))}>
+                  <span className="pos">
+                    {i + 1}
+                    <i className="dot" style={{background: "#b8860b"}} />
+                  </span>
+                  <span className="vessel">
+                    <b>{r.name}</b>
+                    <small>MMSI {r.mmsi}</small>
+                  </span>
+                  <span className="meta">
+                    ~{r.estimated_entry_minutes} min · of {r.forecast_horizon_hours} h horizon
+                  </span>
+                  <span className="sus">
+                    {r.detour
+                      ? <>{fmt(r.detour.original_heading_deg, 0)}° → <b>{fmt(r.detour.suggested_heading_deg, 0)}°</b>
+                        {" "}({r.detour.heading_change_deg > 0 ? "+" : ""}{fmt(r.detour.heading_change_deg, 0)}°)</>
+                      : "No detour computed"}
+                  </span>
+                  <span className="pct" style={{color: r.risk === "HIGH" ? "var(--danger)" : "var(--warn)"}}>
+                    {r.risk}
+                  </span>
+                </button>
+              ))}
+            </>
+          ) : (
+            <div className="empty">No monitored vessel is projected to enter the affected area.</div>
+          )}
+          <div className="subtle" style={{marginTop: 6, fontSize: 12}}>
+            Kinematic projection from each vessel's current speed/heading — a prototype trajectory, not a
+            navigational prediction. Detour headings are a SIMULATED ROUTE AVOIDANCE demo, not maritime guidance.
           </div>
         </div>
       )}

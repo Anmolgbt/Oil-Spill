@@ -30,3 +30,19 @@ MODEL_ARTIFACTS_DIR = BACKEND_DIR / "artifacts"
 # Marks a value this backend calculates itself — drift geometry, AIS distances,
 # the weighted score — as opposed to one a trained model produced.
 COMPUTED_PROVENANCE = {"source": "computed", "model_version": None}
+
+# --- t3 oil/no-oil simulation -------------------------------------------------
+# The t3 satellite pass is the only one where a vessel's tile may show oil. Which
+# vessels get an oil tile is decided by a seeded random draw BEFORE the CNN ever
+# sees an image, so the same seed always replays the same demo and the model's
+# own verdict is never told the answer in advance.
+SIMULATION_SEED = 42
+T3_OIL_MIN = 1
+T3_OIL_MAX = 3
+
+# --- forward risk / reroute simulation ---------------------------------------
+# How far ahead a vessel's straight-line projected track is checked against the
+# spill polygons, and how much clearance the demo detour keeps from the spill's
+# buffered edge. Both are prototype constants, not navigational standards.
+RISK_FORECAST_HOURS = 6
+RISK_SAFETY_BUFFER_KM = 3.0

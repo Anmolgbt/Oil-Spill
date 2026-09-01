@@ -30,6 +30,8 @@ from .investigation import (HINDCAST_DRIFT_DIRECTION_DEG, HINDCAST_DRIFT_SPEED_K
                             SEARCH_TIME_BEFORE_HOURS, TRAJECTORY_AFTER_HOURS,
                             TRAJECTORY_BEFORE_HOURS, WEIGHT_BEHAVIOUR,
                             WEIGHT_PROXIMITY, WEIGHT_TRAJECTORY, forecast)
+from .risk import assess_fleet, spill_polygons
+from .reroute import suggest_detour
 from .snapshots import get_available_snapshots, get_latest_snapshot
 
 FLEET_FILE = SIMULATION_DIR / "fleet.json"
@@ -330,7 +332,7 @@ def run_fleet_scan(snapshot_id=None):
         }
         det_source = hindcast_over(det_spill["latitude"], det_spill["longitude"], hours)
         det_ais = rank_fleet(scan["ships"], det_source, release_at) if release_at else None
-        spills.append({
+        spill_entry = {
             "spill": det_spill,
             "source": det_source,
             "age": {
@@ -344,7 +346,22 @@ def run_fleet_scan(snapshot_id=None):
             "forecast": forecast(det_spill["latitude"], det_spill["longitude"]),
             "ais": det_ais,
             "candidates": det_ais["candidates"] if det_ais else [],
-        })
+        }
+
+        # FORWARD RISK — separate from the attribution above. Attribution looks
+        # backward at historic AIS around the estimated source; this looks
+        # forward from each vessel's CURRENT position/heading against the
+        # spill's current + forecast polygons. Never merge these two.
+        risk = assess_fleet(scan["ships"], spill_entry)
+        polygons = spill_polygons(spill_entry, max_hours_ahead=risk["forecast_horizon_hours"])
+        ships_by_id = {s["id"]: s for s in scan["ships"]}
+        for entry in risk["at_risk"]:
+            ship = ships_by_id.get(entry["ship_id"])
+            detour = suggest_detour(ship, polygons, risk["forecast_horizon_hours"]) if ship else None
+            entry["detour"] = detour
+        spill_entry["risk"] = risk
+
+        spills.append(spill_entry)
 
     # The strongest detection also fills the top-level fields.
     primary = spills[0]
@@ -352,6 +369,7 @@ def run_fleet_scan(snapshot_id=None):
     spill, source, ais = primary["spill"], primary["source"], primary["ais"]
     fc = primary["forecast"]
     candidates = primary["candidates"]
+    risk = primary["risk"]
 
     return {
         **base,
@@ -367,6 +385,7 @@ def run_fleet_scan(snapshot_id=None):
         "candidates": candidates,
         "forecast": fc,
         "top_suspect": candidates[0] if candidates else None,
+        "risk": risk,
         "interpretation": {
             "vessel_causation_proven": False,
             "forecast_type": "kinematic_projection",

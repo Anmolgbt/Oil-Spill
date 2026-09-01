@@ -19,6 +19,10 @@ torchvision>=0.17
 numpy>=1.26,<3
 pandas>=2.2
 
+# Geometry for the forward risk / reroute simulation (backend/services/risk.py):
+# projected-track vs. spill-polygon intersection and the detour waypoints.
+shapely>=2.0
+
 # Live AIS inference (backend/ml/ais_inference.py).
 #
 # scikit-learn is pinned EXACTLY and must stay that way: the bundled

@@ -1,3 +1,4 @@
+import json
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException
@@ -5,6 +6,7 @@ from pydantic import BaseModel
 
 from services.fleet_pipeline import load_fleet, run_fleet_scan
 from services.snapshots import get_available_snapshots, get_latest_snapshot
+from services.t3_simulation import GROUND_TRUTH_FILE
 
 router = APIRouter(tags=["fleet"], prefix="/fleet")
 
@@ -49,3 +51,17 @@ def scan(req: ScanRequest = ScanRequest()):
     if result.get("status") == "NO_SNAPSHOT":
         raise HTTPException(404, result["message"])
     return result
+
+
+@router.get("/t3-ground-truth-debug")
+def t3_ground_truth_debug():
+    """
+    INTERNAL/DEBUG ONLY — the seeded oil/no-oil assignment for pass t3.
+
+    Never consulted by the CNN or by run_fleet_scan(); this exists only so a
+    demo run can be checked against what the simulation actually assigned,
+    and so a given SIMULATION_SEED can be shown to replay identically.
+    """
+    if not GROUND_TRUTH_FILE.is_file():
+        raise HTTPException(404, "No t3 ground truth on disk yet — run scripts/build_fleet.py.")
+    return json.loads(GROUND_TRUTH_FILE.read_text())
