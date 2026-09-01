@@ -37,8 +37,8 @@ COMPUTED_PROVENANCE = {"source": "computed", "model_version": None}
 # sees an image, so the same seed always replays the same demo and the model's
 # own verdict is never told the answer in advance.
 SIMULATION_SEED = 42
-T3_OIL_MIN = 1
-T3_OIL_MAX = 3
+T3_OIL_MIN = 2
+T3_OIL_MAX = 2
 
 # --- forward risk / reroute simulation ---------------------------------------
 # How far ahead a vessel's straight-line projected track is checked against the

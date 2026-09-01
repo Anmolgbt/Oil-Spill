@@ -38,7 +38,7 @@ BACKEND = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND))
 
 from core.config import AIS_REFERENCE_FILE, SIMULATION_DIR, SIMULATION_SEED
-from services.geo import haversine_km
+from services.geo import angle_diff, bearing_deg, haversine_km
 from services.t3_simulation import CLEAN_POOL_DIR, write_t3_snapshot
 
 FLEET_FILE = SIMULATION_DIR / "fleet.json"
@@ -46,13 +46,30 @@ SNAPSHOTS_DIR = SIMULATION_DIR / "snapshots"
 
 FLEET_SIZE = 10
 # A real, historically busy patch of Gulf traffic. This is only used to pick a
-# geographically tight CLUSTER out of the corpus — the vessels' own recorded
-# coordinates are what gets used everywhere downstream.
+# CLUSTER out of the corpus — the vessels' own recorded coordinates, speed and
+# course are what gets used everywhere downstream.
 CLUSTER_CENTER_LAT = 28.57
 CLUSTER_CENTER_LON = -94.80
-CLUSTER_RADIUS_KM = 20
+CLUSTER_RADIUS_KM = 60
 MIN_TRACK_POINTS = 30
 MIN_TRACK_RANGE_KM = 1.5   # excludes vessels that barely moved (e.g. moored)
+
+# The fleet is deliberately NOT one tight huddle: a huddle puts every vessel
+# inside the spill's own drift envelope by construction, so nothing ever reads
+# as "safe". Instead the cluster is split by each vessel's own recorded
+# position and heading (real values, nothing invented):
+#   NEAR         within NEAR_KM of the centre — where an oil-positive tile is
+#                most demo-plausible, and immediate neighbours of a spill.
+#   CROSSING     farther out, but the vessel's own last recorded course
+#                already points back toward the centre — a real vessel that
+#                would plausibly transit through the area.
+#   MOVING AWAY  farther out and heading away — vessels that stay clearly
+#                safe, for contrast.
+NEAR_KM = 15
+NEAR_COUNT = 3
+CROSS_ANGLE_DEG = 55     # heading within this many degrees of "toward centre"
+CROSS_COUNT = 4
+AWAY_ANGLE_DEG = 125     # heading within this many degrees of "away from centre"
 
 MAX_SEGMENT_GAP_HOURS = 3   # splits a vessel's history into contiguous sessions
 MAX_TRACK_POINTS = 80       # downsample cap per vessel, so the file stays small
@@ -101,8 +118,12 @@ def _downsample(rows, cap):
 
 
 def select_cluster(corpus):
-    """~FLEET_SIZE real vessels clustered near CLUSTER_CENTER, with enough
-    history and enough movement to read as a real route on the map."""
+    """
+    ~FLEET_SIZE real vessels within CLUSTER_RADIUS_KM of the demo centre, split
+    into NEAR / CROSSING / MOVING AWAY by each vessel's own recorded position
+    and last course (see the constants above) so the fleet isn't one huddle
+    where every vessel is trivially "at risk" of whatever spill appears.
+    """
     stats = corpus.groupby("MMSI").agg(
         n=("MMSI", "size"),
         lat=("LAT", "mean"), lon=("LON", "mean"),
@@ -114,11 +135,39 @@ def select_cluster(corpus):
     stats["range_km"] = stats.apply(
         lambda r: haversine_km(r["latmin"], r["lonmin"], r["latmax"], r["lonmax"]), axis=1)
 
+    last_fix = corpus.sort_values("BaseDateTime").groupby("MMSI").tail(1).set_index("MMSI")
+    stats["course"] = stats["MMSI"].map(last_fix["COG"])
+    stats["bearing_to_centre"] = stats.apply(
+        lambda r: bearing_deg(r["lat"], r["lon"], CLUSTER_CENTER_LAT, CLUSTER_CENTER_LON), axis=1)
+    stats["heading_offset"] = stats.apply(
+        lambda r: angle_diff(r["course"], r["bearing_to_centre"]), axis=1)
+
     eligible = stats[(stats["n"] >= MIN_TRACK_POINTS)
                       & (stats["dist_km"] <= CLUSTER_RADIUS_KM)
                       & (stats["range_km"] >= MIN_TRACK_RANGE_KM)]
-    eligible = eligible.sort_values("dist_km")
-    return eligible.head(FLEET_SIZE)["MMSI"].tolist()
+
+    near = eligible[eligible["dist_km"] <= NEAR_KM].sort_values("dist_km")
+    far = eligible[eligible["dist_km"] > NEAR_KM]
+    crossing = far[far["heading_offset"] <= CROSS_ANGLE_DEG].sort_values("dist_km")
+    moving_away = far[far["heading_offset"] >= AWAY_ANGLE_DEG].sort_values("dist_km", ascending=False)
+
+    selected: list = []
+    selected += near.head(NEAR_COUNT)["MMSI"].tolist()
+    selected += [m for m in crossing["MMSI"].tolist() if m not in selected][:CROSS_COUNT]
+    remaining = FLEET_SIZE - len(selected)
+    selected += [m for m in moving_away["MMSI"].tolist() if m not in selected][:remaining]
+
+    # Fall back to the next-nearest untouched vessels if a bucket came up
+    # short (e.g. not enough real traffic heading away from the centre).
+    remaining = FLEET_SIZE - len(selected)
+    if remaining > 0:
+        for mmsi in eligible.sort_values("dist_km")["MMSI"].tolist():
+            if mmsi not in selected:
+                selected.append(mmsi)
+            if len(selected) >= FLEET_SIZE:
+                break
+
+    return selected[:FLEET_SIZE]
 
 
 def build_ship_track(vessel_rows, track_end):
@@ -219,7 +268,11 @@ def main():
 
     if "--skip-images" not in sys.argv:
         fill_clean_snapshots(fleet["ships"])
-        assignments = write_t3_snapshot(fleet["ships"])
+        # Oil only ever lands on a NEAR-cluster vessel (ship1..NEAR_COUNT, in
+        # select_cluster's own ordering) — keeps the spill's location tied to
+        # the cluster core the CROSSING/MOVING-AWAY vessels are plotted against.
+        near_ids = [f"ship{i}" for i in range(1, NEAR_COUNT + 1)]
+        assignments = write_t3_snapshot(fleet["ships"], oil_eligible_ids=near_ids)
         oil_ships = [a["ship_id"] for a in assignments
                      if a["ground_truth_for_simulation"] == "oil"]
         print(f"  t3: {len(assignments)} tiles written, seed={fleet['simulation_seed']}, "

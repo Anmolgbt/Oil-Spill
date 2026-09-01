@@ -35,9 +35,15 @@ def _pool(directory):
     return sorted(directory.glob("*.jpg")) if directory.is_dir() else []
 
 
-def assign_t3_images(ship_ids, seed=SIMULATION_SEED, oil_min=T3_OIL_MIN, oil_max=T3_OIL_MAX):
+def assign_t3_images(ship_ids, seed=SIMULATION_SEED, oil_min=T3_OIL_MIN, oil_max=T3_OIL_MAX,
+                     oil_eligible_ids=None):
     """
     Deterministic oil/clean source-tile assignment for one t3 pass.
+
+    `oil_eligible_ids`, if given, restricts which vessels the draw may pick as
+    oil-positive (e.g. only the vessels near the demo's cluster core) — the
+    rest can only ever get a clean tile. Everything else about the ship stays
+    untouched; this only narrows the random draw's candidate pool.
 
     Returns one record per ship. `ground_truth_for_simulation` is
     internal/debug information for verifying the demo — it is not part of the
@@ -49,9 +55,10 @@ def assign_t3_images(ship_ids, seed=SIMULATION_SEED, oil_min=T3_OIL_MIN, oil_max
         raise FileNotFoundError(f"t3 image pool missing clean/oil tiles under {POOL_DIR}")
 
     ship_ids = list(ship_ids)
+    eligible = list(oil_eligible_ids) if oil_eligible_ids is not None else ship_ids
     rng = random.Random(seed)
-    oil_count = rng.randint(oil_min, min(oil_max, len(ship_ids)))
-    oil_ships = set(rng.sample(ship_ids, oil_count))
+    oil_count = rng.randint(oil_min, min(oil_max, len(eligible)))
+    oil_ships = set(rng.sample(eligible, oil_count))
 
     assignments = []
     for ship_id in ship_ids:
@@ -67,13 +74,13 @@ def assign_t3_images(ship_ids, seed=SIMULATION_SEED, oil_min=T3_OIL_MIN, oil_max
     return assignments
 
 
-def write_t3_snapshot(fleet_ships, seed=SIMULATION_SEED):
+def write_t3_snapshot(fleet_ships, seed=SIMULATION_SEED, oil_eligible_ids=None):
     """
     Populate data/simulation/snapshots/t3/ from the seeded assignment and record
     the ground truth to a side file. The oil model is never called from here.
     """
     ship_ids = [s["id"] for s in fleet_ships]
-    assignments = assign_t3_images(ship_ids, seed=seed)
+    assignments = assign_t3_images(ship_ids, seed=seed, oil_eligible_ids=oil_eligible_ids)
     by_ship = {a["ship_id"]: a for a in assignments}
 
     t3_dir = SNAPSHOTS_DIR / "t3"

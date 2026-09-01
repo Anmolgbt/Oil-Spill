@@ -4,8 +4,7 @@
  "note": "Internal/debug only. Assigned BEFORE any model ran and never passed to the CNN. Use only to verify the demo replays identically for a given seed.",
  "oil_positive_ships": [
   "ship1",
-  "ship2",
-  "ship5"
+  "ship2"
  ],
  "assignments": [
   {
@@ -35,8 +34,8 @@
   {
    "snapshot_id": "t3",
    "ship_id": "ship5",
-   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/oil/class_1.jpg",
-   "ground_truth_for_simulation": "oil"
+   "source_image": "/home/user/Oil-Spill/backend/data/simulation/image_pool/clean/t0_ship1.jpg",
+   "ground_truth_for_simulation": "no_oil"
   },
   {
    "snapshot_id": "t3",
