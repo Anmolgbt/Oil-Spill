@@ -1,177 +1,251 @@
-# OILTRACE AI
-**Explainable Maritime Forensics for Oil-Spill Source Attribution**
+# OILTRACE
 
-Smart India Hackathon 2026 — hackathon MVP.
+**Satellite + AIS oil-spill monitoring and vessel attribution.**
+Smart India Hackathon 2026.
 
-> **DEMO / SYNTHETIC DATA:** This build contains no real vessel, company, or spill event.
+A fleet of vessels is watched by satellite. Every pass, a trained CNN checks each
+vessel's SAR tile for oil. When a spill is found, the system traces it back to a
+probable source, searches historic AIS around that place and time, scores the
+vessels that were nearby, and projects where the oil goes next.
 
+Two trained models do the detection work. Everything between them — drift
+geometry, the AIS search, the ranking — is computed. **Nothing is hardcoded, and
+anything the models cannot produce is reported as unavailable rather than
+estimated.**
 
-## Core story
+---
 
-**SATELLITE → SPILL → BACKTRACK → SOURCE + TIME → AIS → CANDIDATES → EVIDENCE SCORE → FORECAST → REPORT**
+## The problem statement, and where each part is answered
 
-The dashboard turns an observed SAR dark patch into an investigation starting point. It:
-- displays a prepared Sentinel-1 SAR scene and spill mask/overlay;
-- checks oil vs. look-alike classes;
-- visualizes backward particle hindcast and a probabilistic source region;
-- reconstructs synthetic AIS traffic around the **source region + release window**;
-- performs a SAR–AIS consistency check and flags one AIS-inconsistent contact;
-- ranks six synthetic vessels using an explainable weighted score;
-- shows the evidence behind the top candidate;
-- visualizes a 48-hour forecast;
-- replays the incident timeline;
-- generates a printable investigation report.
+> Detect and characterise the oil spill, calculating geometric properties and age
+> if feasible.
 
-The attribution result is **never presented as proof or legal responsibility**.
+`POST /fleet/scan` runs the CNN over every vessel in the newest pass.
+**Age is derived, not assumed**: a tile that was clear on the previous pass and
+oily on this one holds oil at most one satellite revisit old, so the 8 h revisit
+interval bounds it. Geometric properties are limited — see [Limitations](#limitations).
 
-## Quick start
+> Using oceanographic and meteorological data, trace the slick towards the origin
+> point and time, predict the future flow of the slick.
 
-Requirements:
-- Python 3.10+
-- Node.js 18+
+Each detection is back-projected along a drift vector to a probable source and
+release window, then projected forward at +6/12/24/48 h.
+**No oceanographic or meteorological data is used** — the drift vector is a fixed
+assumption. This is stated everywhere it appears, in the API and in the UI.
 
-### Terminal 1 — backend
+> Analyse and attribute the spill to a vessel using historic AIS data... filter
+> out irrelevant traffic... score suspects on proximity, trajectory, behavioural
+> anomalies.
+
+AIS is searched ±2 h around the estimated release time and clipped to a 50 km
+radius — that is the irrelevant-traffic filter. Survivors are scored
+`0.40 × proximity + 0.30 × trajectory + 0.30 × behaviour`, where behaviour is the
+trained Isolation Forest's own verdict on that vessel's track.
+
+> A suitable visual interface.
+
+React + Leaflet dashboard: fleet list, live map, per-vessel detail with its SAR
+tile, and a leaderboard of vessels showing an oil signature.
+
+---
+
+## Quickstart
+
+Requires Python 3.10+ and Node 18+.
 
 ```bash
+# backend
 cd backend
-python3 -m pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
+python3 -m venv .venv && .venv/bin/python -m pip install -r ../requirements.txt
+.venv/bin/python -m uvicorn main:app --reload --port 8000
 ```
 
-Backend:
-- API: http://localhost:8000
-- Swagger: http://localhost:8000/docs
-- Health: http://localhost:8000/health
-
-### Terminal 2 — frontend
-
 ```bash
+# frontend, in a second terminal
 cd frontend
 npm install
 npm run dev
 ```
 
-Open the Vite URL, normally:
-**http://localhost:5173**
+Open http://localhost:5173. The dashboard scans the newest pass on load; the
+`PASS` buttons re-run any pass (T0 and T1 are clear, T2 detects).
 
-### Fastest presentation setup
+`./run_demo.sh` starts both.
 
-The frontend has static fallback data. If the backend is not running:
+---
 
-```bash
-cd frontend
-npm install
-npm run dev
+## How a scan works
+
+```
+newest satellite pass (t2)
+        │
+        ├─ CNN over each vessel's SAR tile ──────── no oil anywhere? report CLEAR, stop
+        │
+        └─ oil found on one or more vessels
+                 │  each detection is treated separately
+                 ├─ age  ≤ one revisit interval (previous pass was clear)
+                 ├─ hindcast back along the drift vector → probable source
+                 ├─ AIS ±2 h around the release time, within 50 km of the source
+                 ├─ Isolation Forest scores each survivor's track
+                 ├─ rank: 0.40 proximity + 0.30 trajectory + 0.30 behaviour
+                 └─ forward projection at +6/12/24/48 h
 ```
 
-The header will show **LOCAL DEMO DATA**, but the investigation remains usable.
+Every flagged vessel gets its own source, age, envelope and suspect list — a spill
+found near a second ship is a second finding, not a footnote to the first.
 
-## Project structure
+---
 
-```text
-oiltrace-ai/
+## Models
+
+### Oil detection — `artifacts/oilspill_cnn.pth`
+
+Custom CNN, **binary classifier**, 421,570 parameters.
+
+```
+Conv(3→32) → ReLU → MaxPool → Conv(32→64) → ReLU → MaxPool
+Conv(64→128) → ReLU → MaxPool → Conv(128→256) → ReLU → AdaptiveAvgPool(1×1)
+Flatten → Linear(256→128) → ReLU → Dropout(0.4) → Linear(128→2)
+```
+
+Preprocessing: `Resize(224×224)` → `Grayscale(3)` → `ToTensor` →
+`Normalize(mean=[0.485,0.456,0.406], std=[0.229,0.224,0.225])`.
+Inference is `softmax` → `argmax`, confidence = probability of the predicted class.
+
+Test set — 555 Sentinel-1 SAR images:
+
+| Accuracy | Precision | Recall | F1 | ROC-AUC |
+|---|---|---|---|---|
+| 89.91% | 97.78% | 71.35% | 82.50% | 93.20% |
+
+Confusion matrix: TN 367 · FP 3 · FN 53 · TP 132.
+
+High precision, moderate recall — it rarely cries wolf, but misses roughly one
+spill in four. For monitoring, a missed spill costs more than a false alarm, so
+this is the trade-off to be aware of.
+
+CPU inference: ~5 ms per tile.
+
+### AIS behaviour — `artifacts/ais_isolation_forest.pkl`
+
+`IsolationForest(n_estimators=200, contamination=0.02, random_state=42)` with a
+`StandardScaler` fitted over 52,596 AIS records.
+
+Features, **in this exact order** (pinned by the scaler's `feature_names_in_`):
+
+```
+["SOG", "speed_change", "COG", "course_change", "time_gap_minutes"]
+```
+
+Scoring is point-level, then aggregated per vessel:
+`anomaly_score = 100 × (max_raw − decision_function) / (max_raw − min_raw)`, and
+`behaviour_score` is that vessel's maximum. The normalisation is **dataset-wide**,
+which is why `backend/data/ais_reference/ais_dataset.csv` must ship with the app —
+without it a single vessel cannot be placed on the same 0–100 scale.
+
+---
+
+## API
+
+| Method | Route | Purpose |
+|---|---|---|
+| POST | `/fleet/scan` | Scan a pass. `{"snapshot_id": "t1"}` optional; defaults to newest |
+| GET | `/fleet` | Monitored vessels and available passes |
+| GET | `/ai-result` | Stored completed case — the dashboard's fallback |
+| GET | `/ai-result/metrics` | CNN validation metrics |
+| GET | `/ai/cnn/status` · POST `/ai/cnn/predict` | CNN status; classify an uploaded image |
+| GET | `/ai/ais/status` · POST `/ai/ais/predict` | Isolation Forest status; score a track |
+| POST | `/ai/investigate` | Single-scene run reproducing the notebook's completed case |
+
+Interactive docs at http://localhost:8000/docs.
+
+---
+
+## Repository
+
+```
 ├── backend/
-│   ├── main.py
-│   ├── models/
-│   │   └── schemas.py
-│   ├── routes/
-│   │   ├── incident.py
-│   │   ├── spill.py
-│   │   ├── hindcast.py
-│   │   ├── forecast.py
-│   │   ├── ais.py
-│   │   ├── attribution.py
-│   │   └── report.py
-│   ├── services/
-│   │   ├── data_store.py
-│   │   ├── spill_detection.py
-│   │   ├── lookalike_filter.py
-│   │   ├── drift_model.py
-│   │   ├── ais_service.py
-│   │   ├── vessel_attribution.py
-│   │   └── report_service.py
-│   ├── data/
-│   └── scripts/
-├── frontend/
-│   ├── package.json
-│   ├── index.html
-│   ├── vite.config.ts
-│   ├── tsconfig.json
-│   ├── src/
-│   │   ├── App.tsx
-│   │   ├── main.tsx
-│   │   ├── lib/api.ts
-│   │   └── styles.css
-│   └── public/
-│       ├── demo-data/
-│       └── demo-images/
-├── ARCHITECTURE.md
-├── DEMO_SCRIPT.md
-└── README.md
+│   ├── main.py                API entrypoint
+│   ├── core/config.py         paths and shared constants
+│   ├── ml/                    cnn_inference.py, ais_inference.py — the model adapters
+│   ├── services/              fleet_pipeline, investigation, stored_result, snapshots, geo
+│   ├── routes/                fleet, cnn, ais, stored_result, investigate
+│   ├── scripts/build_fleet.py regenerates fleet.json and the clean passes
+│   ├── artifacts/             trained model files
+│   └── data/
+│       ├── simulation/        fleet.json + snapshots/t0,t1,t2 (SAR tiles)
+│       ├── ais_reference/     AIS corpus (required at runtime)
+│       └── ai_output/         stored completed case + sample tiles
+├── frontend/src/              App.tsx, styles.css, lib/oiltrace.ts
+├── handoff/                   the Colab notebook and delivered artifacts, untouched
+├── dataset/                   LADOS reference paper
+└── docs/                      ARCHITECTURE.md, MODELS.md, DEMO.md
 ```
 
-## Demo dataset
+The repo is ~17 MB: the AIS corpus (5.3 MB), model weights (3 MB) and the handoff
+folder (4.9 MB) are committed because the app cannot run without them.
 
-Incident:
-`IND-2026-001`
+---
 
-Synthetic vessels:
-- MV Ocean Crest — top candidate, score 91
-- MT Blue Horizon — score 70
-- MV Sea Falcon — score 43
-- MV Coastal Pioneer — AIS-inconsistent flag, score 42
-- MT Eastern Star — score 38
-- MV Neptune — score 18
+## Data provenance
 
-Key demo values:
-- Oil probability: **94%**
-- Estimated area: **12.8 km²**
-- Release window: **10:20–11:10 UTC**
-- Source confidence: **78%**
-- SAR contacts: **5**
-- AIS matched: **4**
-- AIS-inconsistent: **1**
-- Forecast: **48 hours, Medium confidence**
+| Data | Source | Real or synthetic |
+|---|---|---|
+| SAR tiles in `snapshots/` | Public Sentinel-1 oil-spill dataset | **Real imagery** |
+| CNN weights, Isolation Forest, scaler | Trained in the Colab notebook | **Real, trained** |
+| `ais_dataset.csv` | US Gulf of Mexico AIS (MarineCadastre), 52,943 records | **Real AIS** |
+| `fleet.json` — 5 Indian vessels, MMSIs, tracks | Generated for the demo AOI | **Synthetic** |
+| Snapshot timestamps and 8 h revisit | Chosen for the demo | **Synthetic** |
 
-## Scientific honesty
+**The monitored fleet is synthetic and this matters.** The bundled AIS corpus is
+US Gulf traffic and contains no Indian-flag vessels (MMSI 419xxx), so an Indian
+fleet could not be drawn from it. The five vessels, their MMSIs and their tracks
+are invented for the Arabian Sea demo area. The CNN still classifies real SAR
+imagery, and the Isolation Forest genuinely scores these tracks — the behaviour
+scores are real model output over synthetic input, not hand-written numbers.
 
-The spill detector is a **Demo Inference Engine** backed by a prepared, internally consistent scene. It is intentionally structured behind `/detect-spill` so a trained segmentation model can replace it later.
+---
 
-The drift model is an MVP particle model using the documented **current + 3% wind contribution** idea. It is not an operational oceanographic model.
+## Limitations
 
-The attribution engine is a deterministic, explainable weighted sum:
+These are load-bearing. The interface states them wherever the affected value
+appears.
 
-| Factor | Weight |
-|---|---:|
-| Time Match | 20% |
-| Source Region Overlap | 25% |
-| Trajectory Similarity | 20% |
-| Distance | 15% |
-| Behaviour Anomaly | 10% |
-| AIS Consistency | 5% |
-| Vessel Relevance | 5% |
+**No spill area, boundary, thickness or volume.** The CNN is a *classifier*, not a
+segmentation model. It outputs a class and a confidence and produces no mask, so
+there is nothing to measure an area from. The dashboard shows a **search zone**
+(the drift envelope, π r²) — that is the sea area the oil could have reached, not
+the size of the slick. Getting a true slick area requires a segmentation model
+that has not been trained.
 
-It is explicitly a **Prototype Attribution Score**, not a validated forensic/legal model.
+**No environmental data.** Wind, current, wave and oil properties are all absent.
+Hindcast and forecast are *kinematic projections* along a fixed assumed drift
+vector (1.5 km/h for the hindcast, 1.0 km/h for the forecast). This is not drift
+physics and must not be presented as such. The AI output itself carries
+`requires_environmental_drift_data: true`.
 
-## Real-data integration seam
+**The CNN cannot geolocate.** A classifier returns no coordinates. The spill
+position is taken from the vessel's last known AIS fix, which is an input, not a
+model output.
 
-For a future real deployment, replace the demo data loaders/services with:
-- Sentinel-1/Sentinel-2 imagery;
-- live/historical AIS;
-- wind and ocean-current products.
+**Age is an upper bound**, derived from the revisit interval — not measured from
+the imagery, which encodes nothing about age.
 
-The UI/API contracts do not need to change.
+**Ranking is analytical association, never proof.** A high score means a vessel
+was near an *estimated* source during an *estimated* window and behaved unusually.
+It does not establish that it caused the spill, and the system carries
+`vessel_causation_proven: false` throughout.
 
-## Troubleshooting
+**`course_change` is not circular** in the saved AIS model: 359° → 1° is recorded
+as 358°, not 2°. This is reproduced deliberately, because the saved scaler was
+fitted on those values — correcting it requires retraining. See
+[`handoff/README.md`](handoff/README.md).
 
-**Frontend says API is offline:** start the backend in Terminal 1. The frontend still works in local demo mode.
+---
 
-**Map is blank but controls work:** your environment may block OpenStreetMap tiles. The investigation layers still render when tiles are available on a normal network.
+## Further reading
 
-**`uvicorn` import error:** make sure you are inside `backend/` and installed `requirements.txt`.
-
-**`npm` install fails:** check Node.js version (`node -v`) and internet access, then retry `npm install`.
-
-## Credentials
-
-**None.** The MVP has no login and no API keys.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — how the pieces fit together
+- [`docs/MODELS.md`](docs/MODELS.md) — full model cards and preprocessing
+- [`docs/DEMO.md`](docs/DEMO.md) — presentation walkthrough
+- [`handoff/README.md`](handoff/README.md) — the delivered artifacts and notebook quirks

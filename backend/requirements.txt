@@ -2,5 +2,13 @@ fastapi==0.115.0
 uvicorn[standard]==0.30.6
 pydantic==2.9.2
 python-multipart==0.0.9
-numpy==1.26.4
+numpy==2.5.2
 Pillow==10.4.0
+# Live CNN inference (ml/cnn_inference.py). CPU wheels are sufficient.
+torch==2.13.0
+torchvision==0.28.0
+# Live AIS inference (ml/ais_inference.py). scikit-learn is pinned to the
+# version the .pkl artifacts were created with (1.6.1) so they unpickle cleanly.
+scikit-learn==1.6.1
+joblib==1.5.3
+pandas==3.0.5

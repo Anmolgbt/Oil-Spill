@@ -1,0 +1,32 @@
+"""
+Filesystem paths and shared constants.
+
+Every path is resolved from this file's own location, so the app runs correctly
+regardless of the working directory uvicorn was started from. Nothing here
+imports the rest of the app, so any module may import it safely.
+"""
+from pathlib import Path
+
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+
+DATA_DIR = BACKEND_DIR / "data"
+
+# Monitored fleet: fleet.json plus the satellite passes under snapshots/.
+# Served to the browser at /simulation-images.
+SIMULATION_DIR = DATA_DIR / "simulation"
+
+# Completed AI result from the Colab handoff, used as the dashboard's fallback
+# when a live scan is unavailable. Its samples/ folder is served at /ai-images.
+AI_OUTPUT_DIR = DATA_DIR / "ai_output"
+
+# AIS corpus the Isolation Forest was trained and scored on. Required at runtime:
+# the notebook normalises anomaly scores against dataset-wide min/max, so a single
+# vessel cannot be scored on the same 0-100 scale without it.
+AIS_REFERENCE_FILE = DATA_DIR / "ais_reference" / "ais_dataset.csv"
+
+# Trained model files.
+MODEL_ARTIFACTS_DIR = BACKEND_DIR / "artifacts"
+
+# Marks a value this backend calculates itself — drift geometry, AIS distances,
+# the weighted score — as opposed to one a trained model produced.
+COMPUTED_PROVENANCE = {"source": "computed", "model_version": None}

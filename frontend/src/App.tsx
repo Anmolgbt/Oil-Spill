@@ -1,104 +1,535 @@
-import {useEffect,useMemo,useState} from "react";
-import {MapContainer,TileLayer,Polygon,Polyline,Marker,CircleMarker,Popup,Tooltip,useMap} from "react-leaflet";
+import {useEffect, useMemo, useState} from "react";
+import {CircleMarker, MapContainer, Polygon, Polyline, TileLayer, Tooltip, useMap} from "react-leaflet";
 import L from "leaflet";
-import {AlertTriangle,Anchor,ArrowDownLeft,ArrowUpRight,Check,ChevronRight,Clock3,FileText,Info,Layers,Navigation,Pause,Play,RotateCcw,Satellite,Ship,ShieldAlert,Wind,X} from "lucide-react";
-import {attribute,candidates,consistency,detectSpill,forecast,getIncident,geo,hindcast,report,tracks} from "./lib/api";
+import {AlertTriangle, Anchor, Check, FileText, Info, X} from "lucide-react";
+import {NOT_AVAILABLE, fleetViewport, getInvestigation, runFleetScan, show, showCoord, showPct} from "./lib/oiltrace";
 
-const center:[number,number]=[19.68,71.39];
-const icon=(color:string)=>L.divIcon({className:"vessel-icon",html:`<div style="background:${color}"></div>`,iconSize:[16,16],iconAnchor:[8,8]});
-const steps=["Spill Detection","Source Reconstruction","AIS Correlation","Vessel Attribution","Forecast"];
-const bottomSteps=["SATELLITE","SPILL","HINDCAST","SOURCE","AIS","RANKING","EVIDENCE","FORECAST","REPORT"];
-const bottomProgress=[0,2,4,6,7,7];
-const bottomDoneCount=[0,1,4,6,7,9];
-function Card({children,className=""}:{children:any,className?:string}){return <section className={"card "+className}>{children}</section>}
-function Badge({children,tone="blue"}:{children:any,tone?:string}){return <span className={"badge "+tone}>{children}</span>}
-function MapResizeFix(){
- const map=useMap();
- useEffect(()=>{
-  const refresh=()=>map.invalidateSize({animate:false});
-  const timer=window.setTimeout(refresh,120);
-  const container=map.getContainer().parentElement;
-  const observer=container && typeof ResizeObserver!=="undefined" ? new ResizeObserver(refresh) : null;
-  if(observer && container) observer.observe(container);
-  window.addEventListener("resize",refresh);
-  return()=>{window.clearTimeout(timer); observer?.disconnect(); window.removeEventListener("resize",refresh);};
- },[map]);
- return null;
+/**
+ * OILTRACE dashboard.
+ *
+ * One question per panel: which ships are we watching, did the satellite see oil,
+ * where did it come from, who was nearby, where is it going.
+ *
+ * Nothing here computes an investigation value. Every number comes from the
+ * backend scan; anything the models cannot produce renders as "Not available".
+ */
+
+const FALLBACK_CENTER: [number, number] = [28.55, -94.85];
+
+const fmt = (v: any, digits = 1) => (typeof v === "number" ? v.toFixed(digits) : NOT_AVAILABLE);
+
+/** Ring of lat/lng around a point, for the drift envelope. */
+const ring = (lat: number, lon: number, km: number): [number, number][] => {
+  const dLat = km / 110.574;
+  const dLon = km / (111.32 * Math.cos((lat * Math.PI) / 180));
+  return Array.from({length: 49}, (_, i) => {
+    const a = (i * 7.5 * Math.PI) / 180;
+    return [lat + dLat * Math.cos(a), lon + dLon * Math.sin(a)] as [number, number];
+  });
+};
+
+function Card({children, className = ""}: {children: any; className?: string}) {
+  return <section className={"card " + className}>{children}</section>;
 }
-function App(){
- const [inc,setInc]=useState<any>(null),[spill,setSpill]=useState<any>(null),[cand,setCand]=useState<any[]>([]),[cons,setCons]=useState<any>(null),[fc,setFc]=useState<any>(null),[source,setSource]=useState<any>(null),[tracksData,setTracksData]=useState<any>(null),[stage,setStage]=useState(0),[spillGeo,setSpillGeo]=useState<any>(null),[running,setRunning]=useState(false),[hind,setHind]=useState<any>(null),[hindStep,setHindStep]=useState(0),[forecastStep,setForecastStep]=useState(0),[selected,setSelected]=useState<any>(null),[reportData,setReportData]=useState<any>(null),[reportOpen,setReportOpen]=useState(false),[apiLive,setApiLive]=useState(true),[time,setTime]=useState("10:45"),[replay,setReplay]=useState(false),[replayIndex,setReplayIndex]=useState(0);
- useEffect(()=>{(async()=>{const i=await getIncident();setInc(i);setApiLive(!!(await fetch("http://localhost:8000/health").then(r=>r.ok).catch(()=>false)));setSource(await geo("source_region.geojson"));setSpillGeo(await geo("spill_polygon.geojson"));setTracksData(await tracks());})()},[]);
- const wait=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
- const run=async()=>{
-  setRunning(true);
-  setStage(0);
-  setSpill(null); setHind(null); setHindStep(0); setCand([]); setCons(null); setFc(null); setSelected(null); setForecastStep(0); setTime("10:45");
-
-  setStage(1);
-  await wait(650);
-  await detectSpill();
-  setSpill(true);
-  await wait(1100);
-
-  setStage(2);
-  await wait(450);
-  setHind(await hindcast());
-  for(let i=0;i<=4;i++){ setHindStep(i); await wait(420); }
-  await wait(650);
-
-  setStage(3);
-  await wait(450);
-  setCand((await candidates()).vessels);
-  setCons(await consistency());
-  await wait(1100);
-
-  setStage(4);
-  await wait(450);
-  setSelected(await attribute("V001"));
-  await wait(1300);
-
-  setStage(5);
-  await wait(450);
-  setFc(await forecast());
-  for(let i=0;i<=4;i++){ setForecastStep(i); await wait(420); }
-  await wait(650);
-  setRunning(false);
- };
- useEffect(()=>{if(!replay)return;const id=setInterval(()=>setReplayIndex(i=>{if(!inc?.replay_events)return i; if(i>=inc.replay_events.length-1){setReplay(false);return i}return i+1}),1100);return()=>clearInterval(id)},[replay,inc]);
- const vesselById=useMemo(()=>Object.fromEntries((cand||[]).map(v=>[v.vessel_id,v])),[cand]);
- if(!inc)return <div className="loading">Loading OILTRACE AI…</div>;
- return <div className="app">
-  <header className="topbar"><div className="brand"><div className="brandmark"><Anchor size={18}/></div><div><b>OILTRACE AI</b><small>MARITIME OIL-SPILL INTELLIGENCE & ATTRIBUTION</small></div></div><div className="incident"><span className="live-dot"/> {apiLive?"API LIVE":"LOCAL DEMO DATA"} <Badge tone="amber">DEMO / SYNTHETIC</Badge><strong>{inc.incident_id}</strong></div></header>
-  <div className="alertbar"><AlertTriangle size={16}/><b>HIGH PRIORITY MARITIME POLLUTION ALERT</b><span>Oil spill probability 94% · 6 vessels correlated · 1 high-priority investigation candidate.</span></div><div className="kpis"><Kpi icon={<Satellite/>} label="Spill Probability" value="94%" note="Oil-like signature accepted"/><Kpi icon={<Layers/>} label="Estimated Area" value="12.8 km²" note="7.4 × 2.1 km footprint"/><Kpi icon={<Navigation/>} label="Source Confidence" value="78%" note="Probabilistic region"/><Kpi icon={<Ship/>} label="Potential Vessels" value="6" note="6 correlated · 1 high-priority"/></div>
-  <main className="layout">
-   <aside className="left"><Card><div className="eyebrow">INVESTIGATION</div><h2>Incident workflow</h2><button className="start" onClick={run} disabled={running}><Play size={16}/>{running?"INVESTIGATION RUNNING":"START INVESTIGATION"}</button><div className="pipeline">{steps.map((s,i)=><div className={"step "+(stage>=i+1?"done":"")+(stage===i+1?" active":"")} key={s}><div className="step-icon">{stage>=i+1?<Check size={14}/>:i+1}</div><div><b>{s}</b><small>{i===0?"SAR scene + look-alike":i===1?"Wind/current hindcast":i===2?"AIS source-window search":i===3?"Evidence-weighted score":"48-hour drift outlook"}</small></div>{stage>=i+1&&<Check size={14}/>}</div>)}</div></Card>
-    <Card><div className="eyebrow">SATELLITE ANALYSIS</div><div className="scene"><img src="/demo-images/sar_overlay.jpg"/></div><div className="scene-meta"><span>Sentinel-1 SAR</span><span>15 Aug 2026 · 14:00 UTC</span></div><div className="metrics"><div><small>OIL PROB.</small><b>94%</b></div><div><small>AREA</small><b>12.8</b></div><div><small>CONF.</small><b>HIGH</b></div></div></Card>
-    <Card><div className="eyebrow">LOOK-ALIKE ANALYSIS</div>{inc.lookalike.classes.map((x:any)=><div className="barrow" key={x.label}><span>{x.label}</span><b>{Math.round(x.probability*100)}%</b><i><em style={{width:`${x.probability*100}%`}}/></i></div>)}<div className="accepted"><Check size={14}/> Oil-like signature accepted</div></Card>
-   </aside>
-   <section className="mapwrap"><div className="maphead"><div><span className="eyebrow">LIVE INVESTIGATION MAP</span><h1>Arabian Sea · Gujarat Coast AOI</h1><div className="investigation-status">{running&&stage===1&&"ANALYZING SAR SCENE…"}{running&&stage===2&&"BACKTRACKING SLICK PARTICLES…"}{running&&stage===3&&"CORRELATING HISTORICAL AIS…"}{running&&stage===4&&"RANKING SOURCE VESSELS…"}{running&&stage===5&&"PROJECTING 48-HOUR DRIFT…"}{!running&&stage===0&&"READY FOR INVESTIGATION"}{!running&&stage===5&&"INCIDENT RECONSTRUCTED"}</div></div><div className="maptools"><Badge tone="amber">SOURCE 78%</Badge><Badge tone="red">1 AIS-INCONSISTENT</Badge></div></div>
-    <MapContainer center={center} zoom={9} className="map" scrollWheelZoom><MapResizeFix/><TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"/>
-      {source&&stage>=3&&<Polygon positions={source.features[0].geometry.coordinates[0].map((p:number[])=>[p[1],p[0]])} pathOptions={{color:"#f59e0b",fillColor:"#f59e0b",fillOpacity:.16,weight:2,dashArray:"6 6"}}><Tooltip>Probable source region · 78% confidence</Tooltip></Polygon>}
-      {stage>=1&&<SpillLayer geo={spillGeo}/>}
-      {stage>=3&&tracksData?.features?.map((f:any)=><Polyline key={f.properties.vessel_id} positions={f.geometry.coordinates.map((p:number[])=>[p[1],p[0]])} pathOptions={{color:f.properties.vessel_id==="V001"?"#ef4444":"#60a5fa",weight:f.properties.vessel_id==="V001"?3:1.5,opacity:.65}}/>)}
-      {stage>=3&&(cand.length?cand:[]).map((v:any)=>{const p=v.track.find((x:any)=>x.time.includes(time==="10:00"?"T10:00":time==="10:15"?"T10:15":time==="10:30"?"T10:30":"T10:45"))||v.track[5];return <Marker key={v.vessel_id} position={[p.lat,p.lon]} icon={icon(v.vessel_id==="V001"?"#ef4444":"#38bdf8")} eventHandlers={{click:()=>setSelected(v)}}><Popup><b>{v.vessel_name}</b><br/>{v.attribution_score}/100 · {v.confidence}</Popup></Marker>})}
-      {stage>=2&&hind&&hind.particles.map((p:any)=><CircleMarker key={p.id} center={[p.path[Math.min(hindStep,p.path.length-1)].lat,p.path[Math.min(hindStep,p.path.length-1)].lon]} radius={2.8} pathOptions={{color:"#fbbf24",fillColor:"#fbbf24",fillOpacity:.85,weight:0}}/>)}
-      {stage>=5&&fc&&fc.polygons?.slice(0,forecastStep+1).map((f:any)=><Polygon key={f.properties.hours} positions={f.geometry.coordinates[0].map((p:number[])=>[p[1],p[0]])} pathOptions={{color:"#38bdf8",fillColor:"#38bdf8",fillOpacity:.05,weight:2,dashArray:"5 7"}}/>)}
-      {stage>=3&&<div className="source-label"><span>PROBABLE RELEASE REGION</span><b>78% CONFIDENCE</b><small>Probabilistic · not an exact origin</small></div>}
-      <div className="legend"><b>MAP LEGEND</b><span><i className="dot spill"/>Detected oil slick</span><span><i className="dot source-dot"/>Probable release region</span><span><i className="dot hi"/>High-priority candidate</span><span><i className="dot vessel"/>AIS vessel</span><span><i className="line-dot forecast"/>Forecast envelope</span></div>
-    </MapContainer>
-    <div className="mapbottom"><div className="env"><Wind size={15}/><span>WIND <b>235° · 14 kt</b></span><span>CURRENT <b>208° · 0.55 m/s</b></span></div><div className="timebar"><Clock3 size={15}/><b>AIS TIME</b>{inc.slider_times.map((t:string)=><button className={time===t?"sel":""} onClick={()=>setTime(t)} key={t}>{t}</button>)}</div></div>
-   </section>
-   <aside className="right"><Card className="source-recon"><div className="eyebrow">SOURCE RECONSTRUCTION</div><h2>Observed ≠ release location</h2><p>Wind and current can move a slick after release. Backward hindcasting tests where particles converge.</p><div className="window"><small>ESTIMATED RELEASE WINDOW</small><b>10:20 — 11:10 UTC</b><Badge tone="amber">HIGH · 78%</Badge></div><div className="physics"><div><ArrowDownLeft/><small>BACKWARD HINDCAST</small><b>{hind?`${hindStep}/4 hr`:"READY"}</b></div><div><Wind/><small>DRIFT</small><b>2.7 km/h · 215.5°</b></div></div></Card>
-    <Card><div className="eyebrow">SAR–AIS CONSISTENCY</div><div className="consrow"><div><b>{cons?.sar_detected_vessels??5}</b><small>SAR CONTACTS</small></div><ChevronRight/><div><b>{cons?.ais_matched_vessels??4}</b><small>AIS MATCHED</small></div><ChevronRight/><div className="warn"><b>{cons?.inconsistent_vessels??1}</b><small>INCONSISTENT</small></div></div><div className="alert"><ShieldAlert size={15}/><span><b>{cons?.flagged_vessel_name??"MV Coastal Pioneer"}</b><br/>Potential AIS-dark interval · Requires investigation</span></div></Card>
-    <Card><div className="eyebrow">CANDIDATE VESSEL FILTERING</div><div className="subtle">Search scope: probable source region + release-time window</div><div className="candidates">{cand.length?cand.map((v:any)=><button key={v.vessel_id} className={"candidate "+(selected?.vessel_id===v.vessel_id?"selected":"")} onClick={()=>setSelected(v)}><div className="rank">#{cand.indexOf(v)+1}</div><div className="cv"><b>{v.vessel_name}</b><small>{v.vessel_type} · {v.factors.distance_km} km · {v.labels.time_match} time match</small></div><strong>{v.attribution_score}</strong></button>):<div className="empty">Run investigation to reconstruct AIS candidates.</div>}</div></Card>
-    {selected&&<Card className="evidence"><div className="eyebrow">EXPLAINABLE RESULT</div><div className="potential">HIGH-PRIORITY INVESTIGATION CANDIDATE</div><div className="vname">{selected.vessel_name}</div><div className="score"><b>{selected.attribution_score}</b><span>/100</span><Badge tone={selected.confidence==="High"?"red":"amber"}>{selected.confidence} confidence</Badge></div><div className="factorlist">{Object.entries({time_match:"Time Match",source_overlap:"Source Region",trajectory:"Trajectory",distance_score:"Distance",behaviour:"Behaviour",ais_consistency:"AIS Consistency",relevance:"Vessel Relevance"}).map(([k,label]:any)=><div key={k}><span>{label}</span><b>{selected.factors[k]}</b><i><em style={{width:`${selected.factors[k]}%`}}/></i></div>)}</div><ul>{selected.evidence.slice(0,5).map((e:string)=><li key={e}><Check size={13}/>{e}</li>)}</ul><div className="disclaimer"><Info size={14}/>{inc.disclaimer}</div></Card>}
-   </aside>
-  </main>
-  <footer><div className="footer-pipeline">{bottomSteps.map((label,i)=>{const done=i<bottomDoneCount[stage]; const active=stage<5&&i===bottomProgress[stage]; return <div key={label} className={"bottom-step "+(done?"done ":"")+(active?"active":"")}><span>{i+1}</span><b>{label}</b></div>})}</div><div className="footer-actions"><button onClick={()=>{setReplay(true);setReplayIndex(0)}}><RotateCcw size={15}/> Replay Incident</button><button className="reportbtn" onClick={async()=>{setReportData(await report());setReportOpen(true)}}><FileText size={15}/> Generate Report</button></div></footer>
-  {replay&&<div className="modal"><div className="modalbox replaybox"><button className="close" onClick={()=>setReplay(false)}><X/></button><div className="eyebrow">INCIDENT REPLAY</div><h2>Reconstructing the chain of evidence</h2><div className="replaytimeline">{inc.replay_events.map((e:any,i:number)=><div className={"revent "+(i<=replayIndex?"on":"")} key={e.time}><b>{e.time}</b><span/><div><strong>{e.label}</strong><p>{e.detail}</p></div></div>)}</div><div className="replaystate"><Play size={14}/> {inc.replay_events[replayIndex]?.label}</div></div></div>}
-  {reportOpen&&reportData&&<div className="modal"><div className="modalbox reportbox"><button className="close" onClick={()=>setReportOpen(false)}><X/></button><div className="reportprint"><div className="reporthead"><div><b>OILTRACE AI</b><small>INVESTIGATION REPORT · DEMO / SYNTHETIC DATA</small></div><Badge tone="amber">UNDER INVESTIGATION</Badge></div><h2>{inc.title}</h2><p>{inc.region}</p><div className="reportgrid"><div><small>SPILL PROBABILITY</small><b>94%</b></div><div><small>AREA</small><b>12.8 km²</b></div><div><small>RELEASE WINDOW</small><b>10:20–11:10 UTC</b></div><div><small>SOURCE CONFIDENCE</small><b>78%</b></div></div><h3>Candidate ranking</h3>{reportData.top_candidates.map((v:any,i:number)=><div className="reportcandidate" key={v.vessel_id}><b>#{i+1} {v.vessel_name}</b><strong>{v.score}/100</strong><span>{v.confidence} · {v.assessment}</span></div>)}<h3>Forecast risk</h3><p>48-hour forecast confidence: <b>{inc.forecast.confidence}</b>. At-risk areas include {inc.forecast.at_risk_areas.map((a:any)=>a.name).join(", ")}.</p><div className="disclaimer"><Info size={14}/>{reportData.disclaimer}</div></div><button className="print" onClick={()=>window.print()}><FileText size={15}/> Print / Save PDF</button></div></div>}
- </div>
+function Badge({children, tone = "blue"}: {children: any; tone?: string}) {
+  return <span className={"badge " + tone}>{children}</span>;
 }
-function Kpi({icon,label,value,note}:{icon:any,label:string,value:string,note:string}){return <Card className="kpi"><div className="kicon">{icon}</div><div><small>{label}</small><b>{value}</b><span>{note}</span></div></Card>}
-function SpillLayer({geo}:{geo:any}){const ring=geo?.features?.[0]?.geometry?.coordinates?.[0]; return <Polygon positions={(ring||[]).map((p:number[])=>[p[1],p[0]])} pathOptions={{color:"#f97316",fillColor:"#f97316",fillOpacity:.38,weight:2}}><Tooltip>Observed SAR slick · 12.8 km²</Tooltip></Polygon>}
+/** Fit the map to everything the scan produced. */
+function MapFit({points}: {points: [number, number][] | null}) {
+  const map = useMap();
+  useEffect(() => {
+    // Size must be settled before fitting, or Leaflet fits to a stale container
+    // and zooms far past the data.
+    if (!points || points.length < 2) return;
+    const bounds = L.latLngBounds(points.map((p) => L.latLng(p[0], p[1])));
+    const fit = () => {
+      map.invalidateSize({animate: false});
+      map.fitBounds(bounds, {padding: [40, 40], maxZoom: 11, animate: false});
+    };
+    // Fit twice: once as soon as the container exists, once after layout settles.
+    fit();
+    const t = window.setTimeout(fit, 350);
+    window.addEventListener("resize", fit);
+    return () => { window.clearTimeout(t); window.removeEventListener("resize", fit); };
+  }, [points && points.length, points && points[0][0]]);
+  return null;
+}
+
+function App() {
+  const [scan, setScan] = useState<any>(null);
+  const [running, setRunning] = useState(false);
+  const [selected, setSelected] = useState<any>(null);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [error, setError] = useState("");
+  const [fallback, setFallback] = useState(false);
+  const [legendOpen, setLegendOpen] = useState(false);
+
+  const load = async (snapshotId?: string) => {
+    setRunning(true);
+    setError("");
+    setSelected(null);
+
+    // 1. live fleet scan  2. stored completed case  3. bundled JSON
+    const fleetScan = await runFleetScan(snapshotId);
+    if (fleetScan) {
+      setScan(fleetScan);
+      setFallback(false);
+      // Open on the vessel the signature was found near, so the panel is never
+      // empty on a pass that detected something.
+      const top = fleetScan.detections?.[0];
+      if (top) setSelected(fleetScan.fleet.find((f: any) => f.id === top.id) ?? top);
+      setRunning(false);
+      return;
+    }
+    // The stored completed case nests its fields differently to a fleet scan, so
+    // normalise it here rather than teaching every panel two shapes.
+    const stored = await getInvestigation();
+    if (stored) {
+      const det = stored.detection || {};
+      const cands = stored.ais?.candidates || [];
+      setScan({
+        ...stored,
+        status: det.oil_detected ? "SPILL_DETECTED" : "CLEAR",
+        message: `Stored completed case — ${det.prediction ?? "result"} at ` +
+                 `${det.confidence != null ? (det.confidence * 100).toFixed(2) + "%" : "unknown"} confidence. ` +
+                 "Live scan unavailable.",
+        fleet: [],
+        scanned: 0,
+        snapshot_id: null,
+        observed_at: null,
+        available_snapshots: [],
+        spill: stored.spill ? {
+          ...stored.spill,
+          ship_name: cands[0]?.name ?? `MMSI ${cands[0]?.mmsi ?? "—"}`,
+          confidence: det.confidence,
+        } : null,
+        age: stored.source?.hours_backward != null
+          ? {estimated_hours: stored.source.hours_backward, release_at: null}
+          : null,
+        affected_area: null,   // no envelope in the stored payload; do not invent one
+        candidates: cands.map((c: any) => ({...c, name: c.name ?? `MMSI ${c.mmsi}`, in_fleet: true})),
+        ais: stored.ais,
+      });
+      setFallback(true);
+      setRunning(false);
+      return;
+    }
+    setError("Backend unreachable and no bundled result available.");
+    setRunning(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const fleet = scan?.fleet || [];
+  const spill = scan?.spill;
+  const source = scan?.source;
+  const candidates = scan?.candidates || [];
+  const forecast = scan?.forecast;
+  const age = scan?.age;
+  const area = scan?.affected_area;
+  const detected = scan?.status === "SPILL_DETECTED";
+
+  const rankByMmsi = useMemo(
+    () => Object.fromEntries(candidates.map((c: any) => [c.mmsi, c])),
+    [candidates]
+  );
+
+  // Each flagged vessel carries its own spill findings.
+  const spillFor = (ship: any) =>
+    ship ? (scan?.spills || []).find((sp: any) => sp.spill?.ship_id === ship.id) : undefined;
+  const sel = spillFor(selected);
+  // Map overlays follow the selected spill, falling back to the strongest detection.
+  const shown = sel || (scan?.spills || [])[0];
+  const shownSpill = shown?.spill ?? spill;
+  const shownSource = shown?.source ?? source;
+  const shownArea = shown?.affected_area ?? area;
+  const shownForecast = shown?.forecast ?? forecast;
+
+  const view = useMemo(() => (scan ? fleetViewport(scan) : null), [scan]);
+  const envelope = detected && shownSpill && shownArea?.radius_km
+    ? ring(shownSpill.latitude, shownSpill.longitude, shownArea.radius_km) : null;
+
+  if (!scan && !error) return <div className="loading">Loading OILTRACE…</div>;
+  if (error) return <div className="loading">{error}</div>;
+
+  const mode = fallback ? "STORED RESULT" : "LIVE INFERENCE";
+
+  return (
+    <div className="app">
+      <header className="topbar">
+        <div className="brand">
+          <div className="brandmark"><Anchor size={18} /></div>
+          <div><b>OILTRACE</b><small>SATELLITE + AIS OIL-SPILL MONITORING</small></div>
+        </div>
+        <div className="incident">
+          <span className="live-dot" />
+          <Badge tone={fallback ? "amber" : "blue"}>{mode}</Badge>
+          {scan.snapshot_id && <strong>PASS {String(scan.snapshot_id).toUpperCase()}</strong>}
+          <button className="reportbtn" onClick={() => setReportOpen(true)}
+                  style={{border: "1px solid var(--line)", background: "var(--panel)",
+                          borderRadius: 7, padding: "7px 12px", fontSize: 13, fontWeight: 600,
+                          display: "flex", alignItems: "center", gap: 6, cursor: "pointer",
+                          marginLeft: 6}}>
+            <FileText size={14} /> Report
+          </button>
+        </div>
+      </header>
+
+      {/* One-line verdict. Red only when the model actually found oil. */}
+      <div className={"alertbar" + (detected ? "" : " ok")}>
+        {detected ? <AlertTriangle size={16} /> : <Check size={16} />}
+        <b>{detected ? "OIL SPILL DETECTED" : "NO OIL DETECTED"}</b>
+        <span>{scan.message}</span>
+      </div>
+
+      <main className="layout">
+        {/* ---------------- left: fleet + forecast ---------------- */}
+        <aside className="left">
+          <Card>
+            <div className="eyebrow">
+              MONITORED FLEET
+              <span style={{marginLeft: "auto", textTransform: "none", letterSpacing: 0}}>
+                {running ? "scanning…" : `${fleet.length} vessels`}
+              </span>
+            </div>
+            {(scan.available_snapshots || []).length > 1 && (
+              <div className="timebar" style={{marginBottom: 12}}>
+                <b>PASS</b>
+                {scan.available_snapshots.map((sid: string) => (
+                  <button key={sid} className={scan.snapshot_id === sid ? "sel" : ""}
+                          disabled={running} onClick={() => load(sid)}>
+                    {sid.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="candidates">
+              {fleet.length ? fleet.map((s: any) => (
+                <button key={s.id}
+                        className={"candidate " + (selected?.id === s.id ? "selected" : "")}
+                        onClick={() => setSelected(s)}>
+                  <div className="rank">
+                    <i className="dot" style={{background: s.oil_detected ? "#e2554a" : "#5b9bd8"}} />
+                  </div>
+                  <div className="cv">
+                    <b>{s.name}</b>
+                    <small>{s.vessel_type} · {fmt(s.speed_kt)} kt · {s.status}</small>
+                  </div>
+                  <strong style={{color: s.oil_detected ? "var(--danger)" : "var(--ink-mute)"}}>
+                    {s.confidence ? showPct(s.confidence, 0) : "—"}
+                  </strong>
+                </button>
+              )) : <div className="empty">Fleet data unavailable in this mode.</div>}
+            </div>
+          </Card>
+
+          {/* Forecast belongs to a specific spill, so it shows only for a flagged vessel. */}
+          {sel && (
+            <Card>
+              <div className="eyebrow">
+                WHERE THIS OIL GOES NEXT <Badge tone="amber">KINEMATIC</Badge>
+              </div>
+              <div className="subtle" style={{marginBottom: 6, fontSize: 12}}>
+                From {selected.name}
+              </div>
+              <div className="metrics" style={{marginTop: 4}}>
+                {(sel.forecast?.points || []).map((p: any) => (
+                  <div key={p.hours_ahead}>
+                    <small>+{p.hours_ahead} h</small>
+                    <b style={{fontSize: 14}}>{showCoord(p.latitude, 3)}, {showCoord(p.longitude, 3)}</b>
+                  </div>
+                ))}
+              </div>
+              <div className="subtle" style={{marginTop: 10}}>
+                No wind, current or wave data — drift uses a fixed assumed vector.
+              </div>
+            </Card>
+          )}
+        </aside>
+
+        {/* ---------------- map ---------------- */}
+        <section className="mapwrap">
+          <div className="maphead">
+            <div>
+              <span className="eyebrow">MONITORING MAP</span>
+              <h1>{scan.region || "Monitoring area"}</h1>
+              <div className="subtle">
+                {scan.observed_at
+                  ? `Pass ${String(scan.snapshot_id).toUpperCase()} · ${scan.observed_at.slice(0, 16).replace("T", " ")} UTC · revisit every ${scan.pass_interval_hours ?? "—"} h`
+                  : "Stored result"}
+              </div>
+            </div>
+            <div className="maptools">
+              {detected
+                ? <><Badge tone="red">SPILL</Badge><Badge tone="amber">SOURCE ESTIMATE</Badge></>
+                : <Badge tone="blue">ALL CLEAR</Badge>}
+            </div>
+          </div>
+
+          <MapContainer center={view?.center ?? FALLBACK_CENTER} zoom={7} className="map" scrollWheelZoom>
+            <MapFit points={view?.points ?? null} />
+            <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+
+            {/* possible affected area — drift envelope, never a measured slick */}
+            {envelope && (
+              <Polygon positions={envelope} pathOptions={{color: "#c0261b", fillColor: "#c0261b", fillOpacity: .05, weight: 1.5, dashArray: "5 6"}}>
+                <Tooltip>{shownSpill?.ship_name} · possible affected area, {fmt(shownArea?.radius_km)} km radius<br />Drift envelope, not a measured slick</Tooltip>
+              </Polygon>
+            )}
+
+            {/* hindcast: spill back to probable source */}
+            {detected && shownSource && shownSpill && (
+              <>
+                <Polyline positions={[[shownSource.latitude, shownSource.longitude], [shownSpill.latitude, shownSpill.longitude]]}
+                          pathOptions={{color: "#b45309", weight: 3, opacity: .85}}>
+                  <Tooltip>{shownSpill.ship_name} · drift traced back {show(shownSource.hours_backward)} h</Tooltip>
+                </Polyline>
+                <CircleMarker center={[shownSource.latitude, shownSource.longitude]} radius={8}
+                              pathOptions={{color: "#b45309", fillColor: "#f59e0b", fillOpacity: .9, weight: 3}}>
+                  <Tooltip>Probable source — model estimate<br />{showCoord(shownSource.latitude)}, {showCoord(shownSource.longitude)}</Tooltip>
+                </CircleMarker>
+              </>
+            )}
+
+            {/* forward kinematic projection */}
+            {detected && shownForecast?.points?.length > 0 && shownSpill && (
+              <>
+                <Polyline positions={[[shownSpill.latitude, shownSpill.longitude], ...shownForecast.points.map((p: any) => [p.latitude, p.longitude] as [number, number])]}
+                          pathOptions={{color: "#0b5cab", weight: 2.5, dashArray: "2 7", opacity: .9}} />
+                {shownForecast.points.map((p: any) => (
+                  <CircleMarker key={p.hours_ahead} center={[p.latitude, p.longitude]} radius={4}
+                                pathOptions={{color: "#0b5cab", fillColor: "#fff", fillOpacity: 1, weight: 2.5}}>
+                    <Tooltip>+{p.hours_ahead} h · {showCoord(p.latitude, 4)}, {showCoord(p.longitude, 4)}<br />Kinematic projection</Tooltip>
+                  </CircleMarker>
+                ))}
+              </>
+            )}
+
+            {/* track of the selected vessel only, to keep the map readable */}
+            {selected?.track?.length > 1 && (
+              <Polyline positions={selected.track.map((p: any) => [p.lat, p.lon] as [number, number])}
+                        pathOptions={{color: "#8a95a3", weight: 2.5, opacity: .8}}>
+                <Tooltip>{selected.name} · AIS track</Tooltip>
+              </Polyline>
+            )}
+
+            {/* monitored vessels */}
+            {fleet.map((s: any) => (
+              <CircleMarker
+                key={s.id}
+                center={[s.latitude, s.longitude]}
+                radius={s.oil_detected ? 10 : 6}
+                pathOptions={{
+                  color: s.oil_detected ? "#c0261b" : "#0b5cab",
+                  fillColor: s.oil_detected ? "#e2554a" : "#5b9bd8",
+                  fillOpacity: selected?.id === s.id ? 1 : .8,
+                  weight: selected?.id === s.id ? 4 : 2,
+                }}
+                eventHandlers={{click: () => setSelected(s)}}
+              >
+                <Tooltip>
+                  <b>{s.name}</b><br />MMSI {s.mmsi}<br />
+                  {s.status}{s.confidence ? ` · ${showPct(s.confidence)}` : ""}
+                </Tooltip>
+              </CircleMarker>
+            ))}
+
+            {legendOpen && <div className="legend">
+              <b>LEGEND</b>
+              <span><i className="dot" style={{background: "#5b9bd8"}} />Vessel</span>
+              <span><i className="dot" style={{background: "#e2554a"}} />Oil detected</span>
+              <span><i style={{width: 18, height: 0, borderTop: "2px solid #8a95a3"}} />Selected vessel's past track</span>
+              {detected && <span><i style={{width: 18, height: 0, borderTop: "3px solid #b45309"}} />Where the oil drifted from ({show(source?.hours_backward)} h)</span>}
+              {detected && <span><i style={{width: 18, height: 0, borderTop: "2px dotted #0b5cab"}} />Where it will drift next (48 h)</span>}
+              {detected && <span><i style={{width: 18, height: 0, borderTop: "1px dashed #c0261b"}} />Possible affected area</span>}
+            </div>}
+            <button className={"legendbtn" + (legendOpen ? " open" : "")}
+                    onClick={() => setLegendOpen((v) => !v)}
+                    title={legendOpen ? "Hide legend" : "What do the colours and lines mean?"}
+                    aria-label="Toggle map legend" aria-expanded={legendOpen}>
+              <Info size={17} />
+            </button>
+          </MapContainer>
+
+          <div className="mapbottom">
+            <div className="env">
+              <Info size={14} />
+              <span>WIND <b>{NOT_AVAILABLE}</b></span>
+              <span>CURRENT <b>{NOT_AVAILABLE}</b></span>
+              <span>WAVE <b>{NOT_AVAILABLE}</b></span>
+              <span style={{marginLeft: "auto"}}>Drift uses a fixed assumed vector — no environmental data.</span>
+            </div>
+          </div>
+        </section>
+
+        {/* ---------------- right: vessel detail ---------------- */}
+        <aside className="right">
+          <Card>
+            <div className="eyebrow">
+              VESSEL DETAIL
+              {selected?.oil_detected && <Badge tone="red">OIL DETECTED</Badge>}
+            </div>
+            {selected ? (
+              <>
+                <div className="vname">{selected.name}</div>
+                <div className="subtle">MMSI {selected.mmsi} · {selected.vessel_type}</div>
+
+                <div className="detailtop">
+                  <div>
+                    {selected.image_url
+                      ? <div className="scene"><img src={selected.image_url} alt="SAR tile" /></div>
+                      : <div className="scene" />}
+                    <div className="scene-meta">
+                      <span>Sentinel-1 SAR · pass {String(scan.snapshot_id).toUpperCase()}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="metrics" style={{marginTop: 0}}>
+                      <div style={{gridColumn: "1 / 3"}}>
+                        <small>CNN result</small>
+                        <b style={{fontSize: 17, color: selected.oil_detected ? "var(--danger)" : "var(--ok)"}}>
+                          {selected.prediction ?? NOT_AVAILABLE}
+                        </b>
+                      </div>
+                      <div style={{gridColumn: "1 / 3"}}>
+                        <small>Confidence</small>
+                        <b style={{fontSize: 17}}>{selected.confidence ? showPct(selected.confidence) : NOT_AVAILABLE}</b>
+                      </div>
+                      <div style={{gridColumn: "1 / 3"}}>
+                        <small>Suspect score</small>
+                        <b>{rankByMmsi[selected.mmsi]
+                            ? `${fmt(rankByMmsi[selected.mmsi].final_suspect_score)} / 100`
+                            : "Not ranked"}</b>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="metrics">
+                  <div><small>Position</small><b>{showCoord(selected.latitude, 3)}, {showCoord(selected.longitude, 3)}</b></div>
+                  <div><small>Speed / course</small><b>{fmt(selected.speed_kt)} kt · {fmt(selected.course_deg, 0)}°</b></div>
+                </div>
+                <div className="metrics">
+                  <div><small>Last AIS fix</small><b>{selected.position_time ? selected.position_time.slice(5, 16).replace("T", " ") : NOT_AVAILABLE}</b></div>
+                  <div><small>AIS fixes held</small><b>{selected.track?.length ?? 0}</b></div>
+                </div>
+
+                {/* Findings belong to the vessel they were found on, so each
+                    flagged ship shows its own spill characterisation. */}
+                {sel && (
+                  <>
+                    <div className="eyebrow" style={{marginTop: 16}}>SPILL FOUND HERE</div>
+                    <div className="metrics" style={{marginTop: 0}}>
+                      <div><small>Max age</small><b>{show(sel.age?.estimated_hours, " h")}</b></div>
+                      <div><small>Released (est.)</small><b>{sel.age?.release_at ? `${sel.age.release_at.slice(11, 16)} UTC` : NOT_AVAILABLE}</b></div>
+                    </div>
+                    <div className="metrics">
+                      <div><small>Probable source</small><b>{showCoord(sel.source?.latitude, 3)}, {showCoord(sel.source?.longitude, 3)}</b></div>
+                      <div><small>Search zone</small><b>{fmt(sel.affected_area?.radius_km)} km · {fmt(sel.affected_area?.area_km2, 0)} km²</b></div>
+                    </div>
+                    <div className="metrics">
+                      <div style={{gridColumn: "1 / 3"}}>
+                        <small>Vessels near this source</small>
+                        <b>{sel.candidates.length
+                            ? sel.candidates.map((c: any) => `${c.name} (${fmt(c.final_suspect_score)})`).join(", ")
+                            : `None within ${fmt(sel.ais?.search_radius_km, 0)} km`}</b>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+              </>
+            ) : (
+              <div className="empty">Select a vessel on the map or in the fleet list.</div>
+            )}
+          </Card>
+        </aside>
+      </main>
+
+      {/* ---------------- leaking-vessel leaderboard ---------------- */}
+      {detected && (
+        <div className="oilstrip">
+          <div className="eyebrow">
+            VESSELS SHOWING AN OIL SIGNATURE
+            <span style={{marginLeft: "auto", textTransform: "none", letterSpacing: 0}}>
+              {(scan.detections || []).length} of {scan.scanned} scanned
+            </span>
+          </div>
+          <div className="oilhead">
+            <span>#</span><span>Vessel</span><span>Position</span>
+            <span>Attribution</span><span>CNN confidence</span>
+          </div>
+          {(scan.detections || []).map((d: any, i: number) => {
+            const rank = rankByMmsi[d.mmsi];
+            return (
+              <button key={d.id}
+                      className={"oilrank " + (selected?.id === d.id ? "selected" : "")}
+                      onClick={() => setSelected(d)}>
+                <span className="pos">
+                  {i + 1}
+                  <i className="dot" style={{background: "#e2554a"}} />
+                </span>
+                <span className="vessel">
+                  <b>{d.name}</b>
+                  <small>MMSI {d.mmsi} · {d.vessel_type}</small>
+                </span>
+                <span className="meta">
+                  {showCoord(d.latitude, 3)}, {showCoord(d.longitude, 3)}
+                </span>
+                <span className="sus">
+                  {rank
+                    ? <>Suspect #{rank.rank} · score <b>{fmt(rank.final_suspect_score)}</b> · {fmt(rank.minimum_distance_km, 1)} km from source</>
+                    : <>Not ranked — not near the estimated source in the release window</>}
+                </span>
+                <span className="pct">{showPct(d.confidence, 1)}</span>
+              </button>
+            );
+          })}
+          <div className="subtle" style={{marginTop: 6, fontSize: 12}}>
+            Analytical association with an estimated source window — not proof of responsibility.
+          </div>
+        </div>
+      )}
+
+      {reportOpen && (
+        <div className="modal">
+          <div className="modalbox reportbox">
+            <button className="close" onClick={() => setReportOpen(false)}><X /></button>
+            <div className="reporthead">
+              <div><b>OILTRACE</b><small>MONITORING REPORT · PASS {String(scan.snapshot_id).toUpperCase()}</small></div>
+              <Badge tone={detected ? "red" : "blue"}>{detected ? "SPILL DETECTED" : "ALL CLEAR"}</Badge>
+            </div>
+            <h2>{detected ? `Oil signature near ${spill?.ship_name}` : "No oil signature detected"}</h2>
+            <p>{scan.message}</p>
+            <div className="reportgrid">
+              <div><small>CONFIDENCE</small><b>{detected ? showPct(spill?.confidence) : NOT_AVAILABLE}</b></div>
+              <div><small>SPILL AREA</small><b>{NOT_AVAILABLE}</b></div>
+              <div><small>EST. AGE</small><b>{detected ? show(age?.estimated_hours, " h") : NOT_AVAILABLE}</b></div>
+              <div><small>SUSPECTS</small><b>{detected ? candidates.length : NOT_AVAILABLE}</b></div>
+            </div>
+            {detected && (
+              <>
+                <h3>Suspect ranking</h3>
+                {candidates.map((c: any, i: number) => (
+                  <div className="reportcandidate" key={c.mmsi}>
+                    <b>#{i + 1} {c.name}</b>
+                    <strong>{fmt(c.final_suspect_score)}</strong>
+                    <span>MMSI {c.mmsi} · {fmt(c.minimum_distance_km, 2)} km · {c.trajectory_status}</span>
+                  </div>
+                ))}
+              </>
+            )}
+            <div className="disclaimer" style={{marginTop: 14}}>
+              <Info size={14} />
+              Classification only — no segmentation, so no spill area, thickness or boundary.
+              Source and age are model estimates; the forecast is a kinematic projection with no
+              environmental data. Vessel ranking does not establish responsibility.
+            </div>
+            <button className="print" onClick={() => window.print()}><FileText size={15} /> Print / Save PDF</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default App;
