@@ -125,7 +125,18 @@ button { font: inherit; color: inherit; }
 
 /* ---------- fleet + candidate rows ---------- */
 
-.candidates { display: flex; flex-direction: column; }
+/* Scrolls on its own instead of stacking every vessel down the page, so the
+   fleet list stays a fixed-height panel however many vessels are monitored. */
+.candidates {
+  display: flex; flex-direction: column;
+  max-height: 380px; overflow-y: auto; overscroll-behavior: contain;
+}
+.candidates::-webkit-scrollbar { width: 8px; }
+.candidates::-webkit-scrollbar-track { background: transparent; }
+.candidates::-webkit-scrollbar-thumb {
+  background: #c8d2dd; border-radius: 4px;
+}
+.candidates::-webkit-scrollbar-thumb:hover { background: #aab8c6; }
 .candidate {
   width: 100%; display: grid; grid-template-columns: 26px 1fr auto;
   gap: 10px; align-items: center; text-align: left; cursor: pointer;
