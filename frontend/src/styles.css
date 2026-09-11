@@ -1,0 +1,1228 @@
+/* OILTRACE — light theme.
+   Larger, higher-contrast text on white. Class names match the previous dark
+   sheet so markup did not have to change. */
+
+:root {
+  --bg: #f4f6f8;
+  --panel: #ffffff;
+  --line: #d8dee6;
+  --line-soft: #e8edf2;
+  --ink: #10141a;
+  --ink-soft: #45505f;
+  --ink-mute: #6b7684;
+  --accent: #0b5cab;
+  --accent-soft: #e8f1fb;
+  --danger: #c0261b;
+  --danger-soft: #fdecea;
+  --warn: #9a5b00;
+  --warn-soft: #fdf3e3;
+  --ok: #1c6b3a;
+  --ok-soft: #e9f6ee;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+button { font: inherit; color: inherit; }
+
+.app { min-height: 100vh; background: var(--bg); }
+
+.loading {
+  min-height: 100vh; display: grid; place-items: center;
+  color: var(--ink-soft); font-size: 17px;
+}
+
+/* ---------- top bar ---------- */
+
+.topbar {
+  height: 68px; padding: 0 24px; background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.brand { display: flex; align-items: center; gap: 12px; }
+.brandmark {
+  height: 40px; width: 40px; border-radius: 8px; background: var(--accent);
+  color: #fff; display: grid; place-items: center;
+}
+.brand b { font-size: 21px; letter-spacing: .06em; }
+.brand small {
+  display: block; color: var(--ink-mute); font-size: 11px;
+  letter-spacing: .1em; margin-top: 1px;
+}
+.incident { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--ink-soft); }
+.incident strong { color: var(--ink); font-weight: 700; }
+.live-dot {
+  width: 9px; height: 9px; border-radius: 50%; background: #1fa34a;
+  box-shadow: 0 0 0 3px rgba(31, 163, 74, .18);
+}
+
+/* ---------- badges ---------- */
+
+.badge {
+  font-size: 11px; font-weight: 700; letter-spacing: .06em;
+  padding: 4px 9px; border-radius: 5px; text-transform: uppercase;
+  border: 1px solid transparent; white-space: nowrap;
+}
+.badge.blue  { color: var(--accent); background: var(--accent-soft); border-color: #c4dcf5; }
+.badge.amber { color: var(--warn);   background: var(--warn-soft);   border-color: #f0dcb4; }
+.badge.red   { color: var(--danger); background: var(--danger-soft); border-color: #f4c7c2; }
+
+/* ---------- alert strip ---------- */
+
+.alertbar {
+  margin: 16px 24px 0; padding: 13px 16px; border-radius: 8px;
+  display: flex; align-items: center; gap: 11px; font-size: 14px;
+  border: 1px solid #f4c7c2; background: var(--danger-soft); color: var(--danger);
+}
+.alertbar b { font-weight: 800; letter-spacing: .03em; }
+.alertbar span { color: var(--ink-soft); }
+.alertbar.ok { border-color: #c3e6d0; background: var(--ok-soft); color: var(--ok); }
+
+/* ---------- investigation bar ---------- */
+
+.investbar {
+  margin: 12px 24px 0; padding: 13px 16px; border-radius: 10px;
+  background: var(--panel); border: 1px solid var(--line);
+}
+.investhead {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap;
+}
+.investnow { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.investnow b { font-size: 17px; font-weight: 800; letter-spacing: .02em; }
+.investnow small { color: var(--ink-mute); font-size: 12px; }
+
+.startbtn {
+  display: flex; align-items: center; gap: 6px;
+  border: 1px solid var(--accent); background: var(--accent); color: #fff;
+  border-radius: 7px; padding: 9px 15px;
+  font-size: 13px; font-weight: 700; letter-spacing: .03em; cursor: pointer;
+}
+.startbtn:hover:not(:disabled) { filter: brightness(1.08); }
+.startbtn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Step rail. `done` is what has been established, `at` is the claim on screen
+   right now, `todo` has not been asserted yet and must not look as if it has. */
+.investsteps {
+  list-style: none; margin: 12px 0 0; padding: 0;
+  display: flex; flex-wrap: wrap; gap: 6px 18px;
+}
+.investsteps li {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 11px; font-weight: 700; letter-spacing: .06em;
+  color: var(--ink-mute);
+}
+.investsteps li i {
+  width: 9px; height: 9px; border-radius: 50%;
+  border: 2px solid var(--line); background: var(--panel);
+}
+.investsteps li.done { color: var(--ok); }
+.investsteps li.done i { background: var(--ok); border-color: var(--ok); }
+.investsteps li.at { color: var(--accent); }
+.investsteps li.at i {
+  background: var(--accent); border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.investnote {
+  margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--line-soft);
+  font-size: 13px; line-height: 1.55;
+}
+.investnote p { margin: 0; color: var(--ink-soft); }
+.investnote p + p { margin-top: 3px; }
+.investnote b { color: var(--ink); font-weight: 700; }
+/* The limit carries the same weight as the claim — never smaller, never greyer. */
+.investnote .limit b { color: var(--warn); }
+
+/* Shown where a finding will appear once its stage has been run. */
+.pending {
+  margin-top: 8px; padding: 10px 12px; border-radius: 8px;
+  background: var(--bg); border: 1px dashed var(--line);
+  color: var(--ink-mute); font-size: 12.5px; line-height: 1.5;
+}
+
+/* ---------- scan in progress ---------- */
+
+.scanning {
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: 18px;
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 15px; border-radius: 999px;
+  background: rgba(16, 20, 26, .88); color: #fff;
+  font-size: 13px; font-weight: 600; z-index: 500;
+  pointer-events: none;
+}
+.spinner {
+  width: 13px; height: 13px; border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, .35); border-top-color: #fff;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
+
+/* ---------- cards ---------- */
+
+.card {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 10px; padding: 13px;
+}
+.eyebrow {
+  font-size: 11px; font-weight: 800; letter-spacing: .12em;
+  color: var(--ink-mute); text-transform: uppercase;
+  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+}
+.card h2 { font-size: 18px; margin: 4px 0 8px; }
+.card p, .subtle { font-size: 13px; color: var(--ink-soft); line-height: 1.55; margin: 0; }
+
+/* ---------- layout ---------- */
+
+.layout {
+  display: grid; grid-template-columns: 320px minmax(420px, 1fr) 370px;
+  gap: 14px; padding: 12px 24px 12px; align-items: start;
+}
+.left, .right { display: flex; flex-direction: column; gap: 16px; }
+
+/* ---------- stat rows ---------- */
+
+.metrics {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px 14px; margin-top: 8px;
+}
+.metrics.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.metrics > div { min-width: 0; }
+.metrics small {
+  display: block; color: var(--ink-mute); font-size: 11px;
+  letter-spacing: .07em; text-transform: uppercase; margin-bottom: 2px;
+}
+.metrics b { font-size: 15px; font-weight: 700; word-break: break-word; }
+
+/* ---------- fleet + candidate rows ---------- */
+
+/* Scrolls on its own instead of stacking every vessel down the page, so the
+   fleet list stays a fixed-height panel however many vessels are monitored. */
+.candidates {
+  display: flex; flex-direction: column;
+  max-height: 380px; overflow-y: auto; overscroll-behavior: contain;
+}
+.candidates::-webkit-scrollbar { width: 8px; }
+.candidates::-webkit-scrollbar-track { background: transparent; }
+.candidates::-webkit-scrollbar-thumb {
+  background: #c8d2dd; border-radius: 4px;
+}
+.candidates::-webkit-scrollbar-thumb:hover { background: #aab8c6; }
+.candidate {
+  width: 100%; display: grid; grid-template-columns: 26px 1fr auto;
+  gap: 10px; align-items: center; text-align: left; cursor: pointer;
+  background: transparent; border: 0; border-top: 1px solid var(--line-soft);
+  padding: 8px 4px;
+}
+.candidate:first-child { border-top: 0; }
+.candidate:hover { background: #f7fafd; }
+.candidate.selected { background: var(--accent-soft); }
+.rank { font-size: 13px; font-weight: 700; color: var(--ink-mute); text-align: center; }
+.cv b { display: block; font-size: 14px; font-weight: 700; }
+.cv small { display: block; color: var(--ink-mute); font-size: 12px; margin-top: 2px; }
+.candidate > strong { font-size: 17px; font-weight: 800; }
+.empty { font-size: 13px; color: var(--ink-mute); padding: 16px 4px; }
+
+.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+/* ---------- map ---------- */
+
+.mapwrap {
+  min-width: 0; display: flex; flex-direction: column;
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 10px; overflow: hidden;
+  /* anchors the .scanning overlay */
+  position: relative;
+}
+.maphead {
+  padding: 13px 16px; display: flex; justify-content: space-between;
+  align-items: center; border-bottom: 1px solid var(--line); gap: 12px;
+}
+.maphead h1 { font-size: 15px; margin: 3px 0 0; font-weight: 700; }
+.maptools { display: flex; gap: 6px; flex: none; }
+.map { flex: 1; min-height: 360px; background: #dfe7ee; }
+/* Thermal mode's dark map — a filter on the same keyless OSM tiles already
+   used everywhere else, not a second tile provider. (CARTO's dark basemap
+   started requiring a paid API key in Aug 2026 and stamps unauthenticated
+   requests with a watermark — this sidesteps that entirely, and any future
+   equivalent from any other provider.) Only the tile pane is inverted, not
+   markers/overlays, which sit in separate Leaflet panes. */
+.map.thermal-dark .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.82) contrast(0.95) saturate(0.7);
+}
+
+/* Legend is collapsed behind the "i" button so it does not cover the map. */
+.legendbtn {
+  position: absolute; z-index: 500; bottom: 12px; left: 12px;
+  width: 32px; height: 32px; border-radius: 50%; cursor: pointer;
+  background: var(--panel); border: 1px solid var(--line); color: var(--ink-soft);
+  display: grid; place-items: center;
+  box-shadow: 0 2px 8px rgba(16, 20, 26, .12);
+}
+.legendbtn:hover { border-color: var(--accent); color: var(--accent); }
+.legendbtn.open { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+.legend {
+  position: absolute; z-index: 500; bottom: 52px; left: 12px;
+  background: rgba(255, 255, 255, .95); border: 1px solid var(--line);
+  border-radius: 8px; padding: 10px 12px; display: grid; gap: 6px; font-size: 12px;
+  box-shadow: 0 2px 10px rgba(16, 20, 26, .08);
+}
+.legend b { font-size: 11px; letter-spacing: .1em; color: var(--ink-mute); }
+.legend span { display: flex; align-items: center; gap: 8px; color: var(--ink-soft); }
+
+.mapbottom { border-top: 1px solid var(--line); background: #fafcfe; }
+.env {
+  display: flex; align-items: center; gap: 16px; padding: 10px 16px;
+  font-size: 12px; color: var(--ink-mute); flex-wrap: wrap;
+}
+.env b { color: var(--ink-soft); }
+
+/* ---------- pass selector ---------- */
+
+.timebar { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.timebar b { font-size: 11px; letter-spacing: .1em; color: var(--ink-mute); margin-right: 3px; }
+.timebar button {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  color: var(--ink-soft); padding: 6px 12px; font-size: 13px; font-weight: 700;
+  cursor: pointer;
+}
+.timebar button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.timebar button.sel { background: var(--accent); border-color: var(--accent); color: #fff; }
+.timebar button:disabled { opacity: .55; cursor: default; }
+
+/* ---------- vessel imagery ---------- */
+
+/* SAR tiles are square. Show the whole tile - never crop it - and sit it beside
+   the headline result so the full image costs no extra column height. */
+.detailtop {
+  display: grid; grid-template-columns: 136px minmax(0, 1fr);
+  gap: 12px; align-items: start; margin-top: 10px;
+}
+.scene {
+  width: 136px; height: 136px; overflow: hidden; border: 1px solid var(--line);
+  border-radius: 8px; background: #0f1216;
+}
+.scene img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.scene-meta {
+  display: flex; flex-direction: column; gap: 2px;
+  color: var(--ink-mute); font-size: 11px; margin-top: 6px;
+}
+
+/* ---------- notes ---------- */
+
+.disclaimer {
+  display: flex; gap: 9px; padding: 11px; border-radius: 8px;
+  background: #f6f8fa; border: 1px solid var(--line-soft);
+  color: var(--ink-soft); font-size: 12px; line-height: 1.5;
+}
+.disclaimer svg { flex: none; color: var(--warn); margin-top: 1px; }
+
+.vname { font-size: 20px; font-weight: 800; margin: 2px 0 2px; }
+
+/* ---------- print / report button ---------- */
+
+.print {
+  border: 1px solid var(--accent); background: var(--accent); color: #fff;
+  border-radius: 7px; padding: 9px 14px; font-size: 13px; font-weight: 600;
+  display: flex; align-items: center; gap: 7px; cursor: pointer;
+}
+
+/* ---------- report modal ---------- */
+
+.modal {
+  position: fixed; inset: 0; background: rgba(16, 20, 26, .45);
+  z-index: 2000; display: grid; place-items: center; padding: 32px;
+}
+.modalbox {
+  position: relative; width: min(780px, 95vw); max-height: 90vh; overflow: auto;
+  background: var(--panel); border-radius: 12px; padding: 26px;
+  box-shadow: 0 24px 70px rgba(16, 20, 26, .28);
+}
+.close {
+  position: absolute; right: 14px; top: 14px; background: transparent;
+  border: 0; cursor: pointer; color: var(--ink-mute);
+}
+.reporthead {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  border-bottom: 1px solid var(--line); padding-bottom: 14px;
+  /* .close is position:absolute at right:14px/top:14px over the same box
+     this sits in — without this, the right-aligned badge below renders
+     underneath the close (X) button instead of beside it. */
+  padding-right: 40px;
+}
+.reporthead b { font-size: 20px; letter-spacing: .06em; }
+.reporthead small { display: block; color: var(--ink-mute); font-size: 11px; margin-top: 3px; }
+.reportbox h2 { margin: 18px 0 4px; font-size: 19px; }
+.reportbox h3 {
+  font-size: 12px; text-transform: uppercase; letter-spacing: .1em;
+  margin-top: 22px; color: var(--ink-mute);
+}
+.reportgrid {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  border: 1px solid var(--line); border-radius: 8px; margin: 16px 0; overflow: hidden;
+}
+.reportgrid > div { padding: 12px; border-right: 1px solid var(--line); }
+.reportgrid > div:last-child { border-right: 0; }
+.reportgrid small {
+  display: block; color: var(--ink-mute); font-size: 11px;
+  letter-spacing: .07em; text-transform: uppercase;
+}
+.reportgrid b { display: block; margin-top: 4px; font-size: 16px; }
+/* Shown when a pass holds more than one detection, so the reader knows which
+   one this report covers. */
+.reportscope {
+  margin: 0 0 12px; padding: 9px 12px; border-radius: 8px;
+  background: var(--bg); border: 1px solid var(--line-soft);
+  color: var(--ink-soft); font-size: 13px; line-height: 1.5;
+}
+
+/* A detection with no vessel in range is a result, not a missing value. */
+.reportempty {
+  margin: 8px 0 0; color: var(--ink-mute); font-size: 13px; line-height: 1.5;
+}
+
+.reportcandidate {
+  display: grid; grid-template-columns: 1fr auto; gap: 3px;
+  border-top: 1px solid var(--line-soft); padding: 11px 0;
+}
+.reportcandidate strong { text-align: right; font-size: 16px; }
+.reportcandidate span { grid-column: 1 / 3; color: var(--ink-mute); font-size: 12px; }
+.print { margin-top: 18px; }
+
+/* ---------- responsive ---------- */
+
+@media (max-width: 1280px) {
+  .layout { grid-template-columns: 300px 1fr; }
+  .right { grid-column: 1 / 3; display: grid; grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 860px) {
+  .layout { display: block; }
+  .left, .right { margin-top: 16px; display: flex; }
+  .map { min-height: 460px; }
+}
+
+@media print {
+  body { background: #fff; }
+  .modal { position: static; background: #fff; padding: 0; }
+  .modalbox { box-shadow: none; width: 100%; max-height: none; }
+  .close, .print { display: none; }
+  .app > *:not(.modal) { display: none !important; }
+}
+
+/* ---------- leaking-vessel leaderboard (full width, under the map) ---------- */
+
+.oilstrip {
+  margin: 0 24px 12px; padding: 10px 18px 8px; border-radius: 10px;
+  background: var(--panel); border: 1px solid var(--line);
+}
+.oilstrip .eyebrow { margin-bottom: 4px; }
+
+.oilhead, .oilrank {
+  display: grid;
+  grid-template-columns: 44px minmax(160px, 1.4fr) minmax(150px, 1fr) minmax(190px, 1.2fr) 110px;
+  gap: 14px; align-items: center;
+}
+.oilhead {
+  padding: 4px 8px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--ink-mute); border-bottom: 1px solid var(--line);
+}
+.oilhead span:last-child, .oilrank .pct { text-align: right; }
+
+.oilrank {
+  width: 100%; text-align: left; cursor: pointer; background: transparent;
+  border: 0; border-bottom: 1px solid var(--line-soft); padding: 12px 8px;
+}
+.oilrank:last-child { border-bottom: 0; }
+.oilstrip .oilrank { padding: 7px 8px; }
+.oilrank:hover { background: #fdf7f6; }
+.oilrank.selected { background: var(--danger-soft); }
+
+.oilrank .pos {
+  font-size: 17px; font-weight: 800; color: var(--ink-mute);
+  display: flex; align-items: center; gap: 7px;
+}
+.oilrank .vessel b { display: block; font-size: 15px; font-weight: 700; }
+.oilrank .vessel small { display: block; color: var(--ink-mute); font-size: 12px; margin-top: 1px; }
+.oilrank .meta { font-size: 13px; color: var(--ink-soft); }
+.oilrank .sus { font-size: 13px; color: var(--ink-soft); }
+.oilrank .sus b { color: var(--ink); }
+.oilrank .pct { font-size: 21px; font-weight: 800; color: var(--danger); }
+
+@media (max-width: 980px) {
+  .oilhead { display: none; }
+  .oilrank { grid-template-columns: 40px 1fr 90px; gap: 8px; }
+  .oilrank .meta, .oilrank .sus { grid-column: 2 / 4; }
+}
+
+/* ---------- why this vessel: the suspect score, taken apart ---------- */
+
+.candwrap { border-bottom: 1px solid var(--line-soft); }
+.candwrap:last-of-type { border-bottom: 0; }
+.candwrap .oilrank { border-bottom: 0; }
+/* Selection here means "under examination", not "guilty" — so the row uses the
+   neutral accent tint rather than the red used for confirmed spills. */
+.candwrap .oilrank.selected { background: var(--accent-soft); }
+.candwrap .oilrank:hover { background: var(--bg); }
+.candwrap .oilrank.selected:hover { background: var(--accent-soft); }
+/* Suspect scores are not verdicts. Danger-red across every candidate — the
+   lowest-ranked included — reads as guilt and contradicts the disclaimer
+   directly beneath the table, so this column stays neutral. Only the
+   top-ranked vessel is tinted, and only enough to find it. */
+.candwrap .oilrank .pct { color: var(--ink); }
+
+.whybox {
+  margin: 0 8px 12px; padding: 13px 15px;
+  border: 1px solid var(--line); border-radius: 9px; background: var(--panel);
+}
+.whyhead {
+  font-size: 13px; font-weight: 700; color: var(--ink);
+  margin-bottom: 11px;
+}
+
+.scorebars {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
+}
+@media (max-width: 860px) { .scorebars { grid-template-columns: 1fr; } }
+
+.scorebar-head {
+  display: flex; align-items: baseline; gap: 7px;
+  font-size: 11px; letter-spacing: .07em; color: var(--ink-mute);
+}
+.scorebar-head b { font-weight: 700; color: var(--ink-soft); }
+.scorebar-head .weight { font-variant-numeric: tabular-nums; }
+.scorebar-head strong {
+  margin-left: auto; font-size: 15px; font-weight: 800; color: var(--ink);
+  font-variant-numeric: tabular-nums; letter-spacing: 0;
+}
+.scoretrack {
+  margin: 6px 0 5px; height: 7px; border-radius: 4px;
+  background: var(--line-soft); overflow: hidden;
+}
+.scoretrack i {
+  display: block; height: 100%; border-radius: 4px;
+  background: var(--accent); transition: width .25s ease;
+}
+@media (prefers-reduced-motion: reduce) { .scoretrack i { transition: none; } }
+.scorebar small { font-size: 11.5px; color: var(--ink-mute); line-height: 1.45; }
+/* A term with no verdict must not read as a term that scored zero. */
+.scorebar.missing .scoretrack { background: repeating-linear-gradient(
+  45deg, var(--line-soft), var(--line-soft) 4px, var(--panel) 4px, var(--panel) 8px); }
+.scorebar.missing .scorebar-head strong { color: var(--ink-mute); font-size: 13px; }
+.scorebar.missing small { color: var(--warn); }
+
+.whytotal {
+  margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line-soft);
+  display: flex; align-items: baseline; justify-content: space-between; gap: 14px;
+  font-size: 12.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums;
+  flex-wrap: wrap;
+}
+.whytotal b { font-size: 17px; font-weight: 800; color: var(--ink); }
+.whynote {
+  margin-top: 9px; font-size: 12px; line-height: 1.55; color: var(--ink-mute);
+}
+.whynote b { color: var(--warn); font-weight: 700; }
+
+/* ---------- counterfactual: what if this vessel caused it ---------- */
+
+.whatifbtn {
+  margin-top: 12px; width: 100%;
+  border: 1px solid var(--accent); background: var(--panel); color: var(--accent);
+  border-radius: 7px; padding: 9px 14px;
+  font-size: 12.5px; font-weight: 700; letter-spacing: .04em; cursor: pointer;
+}
+.whatifbtn:hover:not(:disabled) { background: var(--accent-soft); }
+.whatifbtn:disabled { opacity: .55; cursor: progress; }
+.whatifbtn.ghost {
+  margin-top: 10px; width: auto; padding: 6px 12px;
+  border-color: var(--line); color: var(--ink-mute); font-weight: 600;
+  letter-spacing: 0;
+}
+
+.whatifbox {
+  margin-top: 12px; padding: 12px 14px; border-radius: 9px;
+  border: 1px solid var(--line); background: var(--bg);
+}
+/* Consistency is amber, not red: it is corroboration, never a verdict. An
+   exculpatory result is green because ruling a vessel out is a good outcome —
+   the colours must not make "not consistent" read as a failure of the test. */
+.whatifbox.match   { border-color: #f0dcb4; background: var(--warn-soft); }
+.whatifbox.nomatch { border-color: #c3e6d0; background: var(--ok-soft); }
+.whatifbox.none { color: var(--ink-mute); font-size: 12.5px; }
+.whatifhead {
+  display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
+  font-size: 12px; letter-spacing: .05em; margin-bottom: 4px;
+}
+.whatifsay {
+  margin: 9px 0 0; font-size: 12.5px; line-height: 1.55; color: var(--ink-soft);
+}
+
+/* ---------- optimize route ---------- */
+
+.rerouteact {
+  margin-top: 10px; padding: 12px 14px; border-radius: 9px;
+  border: 1px solid var(--line); background: var(--bg);
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--ink-soft);
+}
+.optimisebtn {
+  display: flex; align-items: center; gap: 6px; white-space: nowrap;
+  border: 1px solid var(--ok); background: var(--ok); color: #fff;
+  border-radius: 7px; padding: 9px 15px;
+  font-size: 12.5px; font-weight: 700; letter-spacing: .04em; cursor: pointer;
+}
+.optimisebtn:hover { filter: brightness(1.08); }
+
+.rerouteout { width: 100%; }
+.rerouteouthead {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  font-size: 12px; letter-spacing: .05em; margin-bottom: 4px;
+}
+.undobtn {
+  margin-left: auto; border: 1px solid var(--line); background: var(--panel);
+  color: var(--ink-mute); border-radius: 6px; padding: 5px 11px;
+  font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.undobtn:hover { color: var(--ink); }
+
+/* The at-risk row before anyone has acted on it. */
+.oilrank .await { color: var(--ink-mute); font-style: normal; font-size: 12.5px; }
+
+/* ---------- replay ---------- */
+
+.replay {
+  padding: 11px 16px 14px; border-top: 1px solid var(--line);
+  background: var(--panel);
+}
+.replayhead {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-bottom: 9px;
+}
+.playbtn {
+  display: flex; align-items: center; gap: 6px;
+  border: 1px solid var(--accent); background: var(--accent); color: #fff;
+  border-radius: 7px; padding: 7px 13px;
+  font-size: 12px; font-weight: 700; letter-spacing: .04em; cursor: pointer;
+}
+.playbtn:hover { filter: brightness(1.08); }
+.replayclock {
+  margin-left: auto; font-size: 13px; font-weight: 700;
+  font-variant-numeric: tabular-nums; color: var(--ink);
+}
+
+.scrub {
+  width: 100%; margin: 0; accent-color: var(--accent); cursor: pointer;
+}
+.scrub:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* Pass markers under the scrubber. */
+.replayticks {
+  position: relative; height: 15px; margin-top: 1px;
+  font-size: 10px; font-weight: 700; letter-spacing: .07em; color: var(--ink-mute);
+}
+.replayticks span {
+  position: absolute; transform: translateX(-50%); white-space: nowrap;
+}
+
+/* The observed/projected distinction, stated in words and in colour. It is the
+   most important thing on screen during playback, so it gets its own band
+   rather than being left to the map alone. */
+.replaystate {
+  margin-top: 8px; padding: 9px 12px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--bg);
+  font-size: 12.5px; line-height: 1.5;
+}
+.replaystate b {
+  display: block; font-size: 11px; letter-spacing: .07em; margin-bottom: 2px;
+}
+.replaystate span { color: var(--ink-soft); }
+.replaystate.before    { border-color: #c4dcf5; background: var(--accent-soft); }
+.replaystate.before b  { color: var(--accent); }
+.replaystate.estimated { border-color: #f0dcb4; background: var(--warn-soft); }
+.replaystate.estimated b { color: var(--warn); }
+.replaystate.observed  { border-color: #f4c7c2; background: var(--danger-soft); }
+.replaystate.observed b { color: var(--danger); }
+.replaystate.projected { border-color: #c4dcf5; background: var(--accent-soft); }
+.replaystate.projected b { color: var(--accent); }
+.replayrange { font-size: 11.5px; margin: -3px 0 8px; }
+
+/* ---------- report: stages, notes ---------- */
+
+/* Each stage's finding sits directly above its limit, at the same weight. In a
+   document read after the fact, a caveat parked in a footer is a caveat nobody
+   reads. */
+.reportstages { list-style: none; margin: 6px 0 0; padding: 0; }
+.reportstages li {
+  padding: 8px 0 8px 13px; border-left: 2px solid var(--line);
+  margin-bottom: 2px;
+}
+.reportstages li b {
+  display: block; font-size: 11px; letter-spacing: .07em; color: var(--ink-mute);
+}
+.reportstages li span {
+  display: block; font-size: 13px; color: var(--ink); line-height: 1.5; margin-top: 2px;
+}
+.reportstages li em {
+  display: block; font-size: 12.5px; color: var(--warn);
+  font-style: normal; line-height: 1.5; margin-top: 2px;
+}
+
+.reportnote {
+  font-size: 12.5px; color: var(--ink-mute); line-height: 1.55; margin: 6px 0 8px;
+}
+.reportbox h3 {
+  font-size: 13px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--ink-mute); margin: 18px 0 6px;
+  padding-top: 12px; border-top: 1px solid var(--line-soft);
+}
+.reportcandidate span { white-space: pre-line; }
+
+/* Available to a screen reader, absent from the visual layout. */
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; margin: -1px;
+  padding: 0; overflow: hidden; white-space: nowrap;
+  clip: rect(0 0 0 0); clip-path: inset(50%); border: 0;
+}
+
+/* ---------- flow popup, and the pipeline rail ---------- */
+
+.flowbox { max-width: 720px; }
+.flowintro { font-size: 13.5px; line-height: 1.6; color: var(--ink-soft); margin: 10px 0 4px; }
+
+.flowstages { list-style: none; margin: 12px 0 0; padding: 0; }
+.flowstages li {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 11px 0; border-top: 1px solid var(--line-soft);
+}
+.flownum {
+  flex: 0 0 24px; height: 24px; border-radius: 50%;
+  background: var(--accent-soft); color: var(--accent);
+  display: grid; place-items: center;
+  font-size: 12px; font-weight: 800;
+}
+.flowstages li:first-child .flownum { background: var(--danger-soft); color: var(--danger); }
+.flowstages li b {
+  display: block; font-size: 11px; letter-spacing: .07em; color: var(--ink-mute);
+}
+.flowstages li span {
+  display: block; font-size: 13.5px; color: var(--ink); line-height: 1.5; margin-top: 2px;
+}
+.flowstages li em {
+  display: block; font-size: 12.5px; color: var(--warn);
+  font-style: normal; line-height: 1.5; margin-top: 3px;
+}
+
+/* The rail now records what ran, not how far someone clicked. Stage 1 is the
+   only measurement, so it is the only one that reads as one. */
+.investsteps.ran li.measured { color: var(--danger); }
+.investsteps.ran li.measured i { background: var(--danger); border-color: var(--danger); }
+.investsteps.ran li.inferred { color: var(--warn); }
+.investsteps.ran li.inferred i { background: var(--warn-soft); border-color: var(--warn); }
+
+.linkish {
+  border: 0; background: none; padding: 0; cursor: pointer;
+  color: var(--accent); font-weight: 600; text-decoration: underline;
+  font-size: inherit;
+}
+
+/* ---------- pass uploader ---------- */
+
+.uploader { margin-bottom: 12px; }
+
+/* The left column is 320px, so this stacks rather than trying to sit in a row. */
+.dropzone {
+  display: block; padding: 10px 12px; border-radius: 9px;
+  border: 1px dashed var(--line); background: var(--bg);
+  color: var(--ink-soft); transition: border-color .15s, background .15s;
+}
+.dropzone > svg { display: none; }
+.dropzone.over { border-color: var(--accent); background: var(--accent-soft); }
+.dropzone.sending { opacity: .6; }
+.dropzone > div:first-of-type { min-width: 0; margin-bottom: 8px; }
+.dropzone b { display: flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 700; color: var(--ink); }
+.dropzone small { display: block; font-size: 11px; color: var(--ink-mute); }
+
+.dropactions { display: flex; gap: 5px; }
+.dropactions button { flex: 1; justify-content: center; }
+.dropactions button {
+  display: flex; align-items: center; gap: 4px;
+  border: 1px solid var(--line); background: var(--panel); border-radius: 6px;
+  padding: 5px 9px; font-size: 11.5px; font-weight: 600; cursor: pointer;
+}
+.dropactions button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.dropactions button:disabled { opacity: .5; cursor: not-allowed; }
+
+.uploadstatus {
+  margin-top: 7px; font-size: 12px; color: var(--ink-soft);
+}
+.uploadresult {
+  margin-top: 8px; padding: 9px 11px; border-radius: 8px;
+  border: 1px solid #c3e6d0; background: var(--ok-soft);
+  font-size: 12px; line-height: 1.5;
+}
+.uploadresult b { display: block; color: var(--ok); font-size: 12px; margin-bottom: 3px; }
+.uploadresult ul { margin: 0 0 4px; padding-left: 15px; color: var(--ink-soft); }
+.uploadresult small { display: block; color: var(--ink-mute); margin-top: 3px; }
+.uploadresult small.warn { color: var(--warn); }
+
+.uploadedlist {
+  margin-top: 7px; display: flex; flex-wrap: wrap; gap: 5px;
+}
+.uploadedlist span {
+  display: flex; align-items: center; gap: 4px;
+  border: 1px solid var(--line); border-radius: 5px; padding: 3px 4px 3px 8px;
+  font-size: 11px; font-weight: 700; color: var(--ink-soft);
+}
+.uploadedlist button {
+  border: 0; background: none; padding: 2px; cursor: pointer;
+  color: var(--ink-mute); display: grid; place-items: center;
+}
+.uploadedlist button:hover { color: var(--danger); }
+
+/* Shown when a pass runs past the AIS the fleet actually holds. */
+.stalebar {
+  margin: 12px 24px 0; padding: 10px 14px; border-radius: 8px;
+  display: flex; align-items: center; gap: 10px; font-size: 13px;
+  border: 1px solid #f0dcb4; background: var(--warn-soft); color: var(--warn);
+}
+.stalebar span { color: var(--ink-soft); }
+.stalebar b { color: var(--warn); }
+
+/* ---------- traffic funnel ---------- */
+
+/* The irrelevant-traffic filter, shown as the chain it actually walks. Worth
+   its own row because the problem statement asks for this filtering by name,
+   and because a funnel that stops rejecting anyone should be visibly wrong. */
+.funnel {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin: 2px 0 6px; padding: 8px 10px; border-radius: 8px;
+  background: var(--bg); border: 1px solid var(--line-soft);
+  font-size: 12px; color: var(--ink-soft);
+}
+.funnel b { color: var(--ink); font-weight: 800; font-variant-numeric: tabular-nums; }
+.funnel i { color: var(--ink-mute); font-style: normal; }
+.funnel .kept b { color: var(--accent); }
+.funnel em {
+  margin-left: auto; font-style: normal; color: var(--warn); font-weight: 600;
+}
+.funnelbasis {
+  font-size: 11.5px; color: var(--ink-mute); line-height: 1.5; margin-bottom: 8px;
+}
+
+/* The single constructed thing in the demo, stated where the method is
+   explained rather than left in a data file nobody opens. */
+.copresence {
+  margin-top: 14px; padding: 11px 13px; border-radius: 9px;
+  border: 1px solid #f0dcb4; background: var(--warn-soft);
+  font-size: 13px; line-height: 1.55;
+}
+.copresence > b { display: block; color: var(--warn); margin-bottom: 3px; }
+.copresence span { color: var(--ink-soft); }
+.copresence span b { color: var(--ink); }
+
+/* Shown when a candidate was scored without one of its evidence terms. The
+   score is still on a 0-100 scale, but it was reached from fewer inputs, and
+   that must be visible rather than inferred from a hatched bar alone. */
+.partialnote {
+  margin-bottom: 10px; padding: 8px 11px; border-radius: 7px;
+  border: 1px solid #f0dcb4; background: var(--warn-soft);
+  font-size: 12px; line-height: 1.5; color: var(--ink-soft);
+}
+.partialnote b { color: var(--warn); }
+
+/* ---------- header buttons ---------- */
+
+/* Was written inline on the Report button; lifted here verbatim when the
+   MODEL INFO button next to it needed the same look. */
+.reportbtn {
+  border: 1px solid var(--line); background: var(--panel);
+  border-radius: 7px; padding: 7px 12px;
+  font-size: 13px; font-weight: 600; color: inherit;
+  display: flex; align-items: center; gap: 6px;
+  cursor: pointer; margin-left: 6px;
+}
+
+/* ---------- model info card ---------- */
+
+.modelbox { width: min(820px, 95vw); }
+.modelbox h3 {
+  font-size: 13px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--ink-mute); margin: 20px 0 6px;
+  padding-top: 12px; border-top: 1px solid var(--line-soft);
+}
+.modelbox code { font-size: 12px; color: var(--ink-soft); }
+
+/* The sentences the card exists to make unmissable — what each model does NOT
+   do. Deliberately heavier than the notes around them. */
+.modelstatement {
+  margin: 12px 0 4px; padding: 11px 13px; border-radius: 8px;
+  background: var(--bg); border-left: 3px solid var(--accent);
+  font-size: 13px; line-height: 1.6; color: var(--ink);
+}
+.modelstatement.warn { border-left-color: var(--warn); }
+
+.modellimits { margin: 8px 0 0; padding-left: 18px; }
+.modellimits li {
+  font-size: 12.5px; color: var(--ink-mute); line-height: 1.55; margin-bottom: 6px;
+}
+
+/* ---------- counterfactual robustness ---------- */
+
+/* One line under the counterfactual verdict: how far the drift assumption can
+   move before that verdict changes. Deliberately not a chart — the sweep is a
+   band chosen by hand, and plotting it would lend it a precision it has not
+   got. */
+.robustline {
+  display: flex; gap: 9px; align-items: baseline;
+  margin: 10px 0 2px; padding: 9px 11px; border-radius: 8px;
+  background: var(--bg); border: 1px solid var(--line-soft);
+  font-size: 12.5px; line-height: 1.55; color: var(--ink-mute);
+}
+.robusttag {
+  flex: none; font-size: 11px; font-weight: 800;
+  letter-spacing: .07em; text-transform: uppercase; color: var(--ink-soft);
+}
+/* Tone tracks how much the verdict leans on the assumption, NOT whether the
+   vessel looks guilty — a robust exculpatory result is as good a result as a
+   robust incriminating one. */
+.robustline.robust { border-left: 3px solid var(--ok); }
+.robustline.robust .robusttag { color: var(--ok); }
+.robustline.moderately { border-left: 3px solid var(--warn); }
+.robustline.moderately .robusttag { color: var(--warn); }
+.robustline.highly { border-left: 3px solid var(--danger); }
+.robustline.highly .robusttag { color: var(--danger); }
+
+/* ---------- drift assumption comparison ---------- */
+
+/* The environmental layer toggle, stacked above the legend button so the two
+   map controls read as one column rather than competing. */
+.legendbtn.envbtn { bottom: 52px; }
+.legendbtn.heatbtn { bottom: 92px; }
+.legend { bottom: 92px; }
+
+/* The result this panel exists for: the drift assumption changes who is ranked
+   first. Warn-toned, not danger — it is a known sensitivity, not a fault. */
+.rankflip {
+  display: flex; gap: 10px; align-items: flex-start;
+  margin: 10px 0 4px; padding: 11px 13px; border-radius: 8px;
+  background: var(--warn-soft, var(--bg)); border-left: 3px solid var(--warn);
+  font-size: 13px; line-height: 1.6; color: var(--ink);
+}
+.rankflip svg { flex: none; color: var(--warn); margin-top: 2px; }
+
+.ranksteady {
+  display: flex; gap: 10px; align-items: flex-start;
+  margin: 10px 0 4px; padding: 10px 12px; border-radius: 8px;
+  background: var(--bg); border-left: 3px solid var(--ok);
+  font-size: 12.5px; line-height: 1.55; color: var(--ink-soft);
+}
+.ranksteady svg { flex: none; color: var(--ok); margin-top: 1px; }
+
+.driftgrid {
+  display: grid; grid-template-columns: minmax(220px, 1.1fr) minmax(240px, 1.3fr) 190px;
+  gap: 18px; margin: 14px 0 6px; align-items: start;
+}
+.driftcol > small {
+  display: block; color: var(--ink-mute); font-size: 11px;
+  letter-spacing: .08em; text-transform: uppercase; margin-bottom: 8px;
+}
+.driftrow {
+  display: flex; align-items: baseline; gap: 8px;
+  font-size: 12.5px; color: var(--ink-mute); padding: 3px 0;
+}
+.driftrow b { margin-left: auto; color: var(--ink); font-size: 13px; }
+.driftrow .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.driftsep {
+  margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line-soft);
+  font-size: 12.5px; color: var(--ink-mute);
+}
+.driftsep b { color: var(--ink); font-size: 15px; }
+
+.rosettecol { justify-self: end; }
+.rosette { width: 120px; height: 120px; display: block; margin: 0 auto; }
+.vectorkey { list-style: none; margin: 6px 0 0; padding: 0; }
+.vectorkey li {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 11.5px; color: var(--ink-mute); padding: 2px 0;
+}
+.vectorkey i { width: 10px; height: 2.5px; border-radius: 2px; flex: none; }
+
+.oilhead.rankcmp, .rankrow {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.4fr) minmax(130px, 1fr) minmax(160px, 1fr) 130px;
+  gap: 14px; align-items: center;
+}
+.rankrow {
+  padding: 9px 8px; border-bottom: 1px solid var(--line-soft);
+  font-size: 12.5px; color: var(--ink-mute);
+}
+.rankrow .vessel b { color: var(--ink); font-size: 13px; }
+.rankrow em { font-style: normal; color: var(--ink-mute); }
+/* Direction only — a vessel moving up is not thereby more suspicious, and the
+   colours must not suggest it is. */
+.delta { text-align: right; font-weight: 600; color: var(--ink-mute); }
+.delta.up, .delta.down { color: var(--ink-soft); }
+
+.driftcause {
+  display: flex; gap: 9px; align-items: flex-start;
+  margin-top: 12px; padding: 10px 12px; border-radius: 8px;
+  background: var(--bg); border: 1px solid var(--line-soft);
+  font-size: 12.5px; line-height: 1.55; color: var(--ink-mute);
+}
+.driftcause svg { flex: none; margin-top: 2px; }
+
+@media (max-width: 900px) {
+  .driftgrid { grid-template-columns: 1fr; }
+  .rosettecol { justify-self: start; }
+}
+
+/* ---------- environment-aware counterfactual ---------- */
+
+/* The second run of the same test, under the other drift assumption. Neutral
+   toned on purpose: agreement between two unmeasured assumptions is not
+   corroboration, and colouring it as reassurance would say it was. */
+.modecompare {
+  display: flex; gap: 9px; align-items: baseline;
+  margin: 10px 0 2px; padding: 9px 11px; border-radius: 8px;
+  background: var(--bg); border: 1px solid var(--line-soft);
+  border-left: 3px solid var(--env-accent, #0f766e);
+  font-size: 12.5px; line-height: 1.55; color: var(--ink-mute);
+}
+.modetag {
+  flex: none; font-size: 11px; font-weight: 800;
+  letter-spacing: .07em; text-transform: uppercase; color: #0f766e;
+}
+
+/* ---------- evidence quality and the detection outcome ---------- */
+
+/* The top-level answer, above the ranking that would otherwise imply it. */
+.outcome {
+  margin: 10px 0 14px; padding: 12px 14px; border-radius: 9px;
+  background: var(--bg); border: 1px solid var(--line-soft); border-left-width: 4px;
+}
+.outcome.none      { border-left-color: var(--danger); background: var(--danger-soft, var(--bg)); }
+.outcome.unstable  { border-left-color: var(--warn);   background: var(--warn-soft); }
+.outcome.supported { border-left-color: var(--ok); }
+
+.outcomehead { display: flex; align-items: center; gap: 9px; }
+.outcomehead b { font-size: 13px; letter-spacing: .07em; }
+.outcome.none .outcomehead svg, .outcome.none .outcomehead b { color: var(--danger); }
+.outcome.unstable .outcomehead svg, .outcome.unstable .outcomehead b { color: var(--warn); }
+.outcome.supported .outcomehead svg, .outcome.supported .outcomehead b { color: var(--ok); }
+.outcomecount {
+  margin-left: auto; font-size: 11.5px; color: var(--ink-mute);
+  text-transform: none; letter-spacing: 0;
+}
+.outcomereasons { margin: 9px 0 0; padding-left: 18px; }
+.outcomereasons li {
+  font-size: 12.5px; line-height: 1.6; color: var(--ink); margin-bottom: 5px;
+}
+/* What the outcome does NOT claim. Never omitted, never abbreviated. */
+.outcomemeans {
+  margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--line-soft);
+  font-size: 12px; line-height: 1.55; color: var(--ink-mute);
+}
+
+.evidence {
+  margin: 12px 0 4px; padding: 11px 12px; border-radius: 8px;
+  background: var(--bg); border: 1px solid var(--line-soft);
+}
+.evidencehead {
+  font-size: 11px; font-weight: 800; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--ink-mute); margin-bottom: 8px;
+}
+.evidencehead small {
+  display: block; margin-top: 2px; font-weight: 500; font-size: 11px;
+  letter-spacing: 0; text-transform: none; color: var(--ink-mute);
+}
+.evidencerow {
+  display: grid; grid-template-columns: 96px 130px 1fr; gap: 10px;
+  align-items: baseline; padding: 5px 0; font-size: 12.5px; color: var(--ink-mute);
+}
+.evidencename { color: var(--ink); font-weight: 600; }
+.evidencewhy { line-height: 1.5; }
+
+.gradepill {
+  display: inline-block; text-align: center; padding: 2px 0; border-radius: 4px;
+  font-size: 10.5px; font-weight: 800; letter-spacing: .06em;
+}
+.gradepill.ghigh   { background: #e6f4ec; color: #14683a; }
+.gradepill.gmedium { background: var(--warn-soft); color: var(--warn); }
+.gradepill.glow    { background: #fdecea; color: var(--danger); }
+/* UNAVAILABLE is deliberately NOT the bottom of that ramp — grey, outside the
+   scale, because no evidence is not weak evidence. */
+.gradepill.gunavailable {
+  background: transparent; color: var(--ink-mute);
+  border: 1px dashed var(--line); padding: 1px 0;
+}
+
+.evidencemissing {
+  margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--line-soft);
+  font-size: 12px; line-height: 1.55; color: var(--ink-mute);
+}
+
+/* ---------- the plain-language reading ---------- */
+
+.narrative {
+  margin: 12px 0 4px; padding: 12px 13px; border-radius: 8px;
+  background: var(--panel); border: 1px solid var(--line);
+}
+.narrativehead {
+  font-size: 11px; font-weight: 800; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--ink-mute); margin-bottom: 8px;
+}
+.narrativebeats { list-style: none; margin: 0; padding: 0; }
+.beat {
+  display: flex; gap: 9px; align-items: flex-start;
+  padding: 6px 0; font-size: 13px; line-height: 1.6; color: var(--ink);
+}
+.beat svg { flex: none; margin-top: 3px; }
+.beat.supports svg { color: var(--ok); }
+.beat.weakens svg  { color: var(--warn); }
+.beat.neutral svg  { color: var(--ink-mute); }
+/* A missing beat is styled at full weight, not greyed away. Absent evidence
+   fading into the background is exactly how "UNAVAILABLE is not LOW" gets lost
+   between the grades and the prose. */
+.beat.missing svg  { color: var(--danger); }
+.beat.missing { color: var(--ink); }
+
+.narrativedisclaimer {
+  margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--line-soft);
+  font-size: 12px; line-height: 1.55; color: var(--ink-mute);
+}
+
+/* ---------- report: outcome, evidence, drift, limits ---------- */
+
+.reportoutcome {
+  margin: 10px 0 6px; padding: 12px 14px; border-radius: 8px;
+  background: var(--bg); border: 1px solid var(--line-soft); border-left-width: 4px;
+}
+.reportoutcome.no_strong_candidate         { border-left-color: var(--danger); }
+.reportoutcome.leading_candidate_unstable  { border-left-color: var(--warn); }
+.reportoutcome.candidate_supported         { border-left-color: var(--ok); }
+.reportoutcome b { font-size: 14px; }
+.reportoutcomecount { float: right; font-size: 11.5px; color: var(--ink-mute); }
+.reportoutcome ul { margin: 8px 0 0; padding-left: 18px; }
+.reportoutcome li { font-size: 12.5px; line-height: 1.6; margin-bottom: 4px; }
+.reportoutcome em {
+  display: block; margin-top: 8px; padding-top: 7px;
+  border-top: 1px solid var(--line-soft);
+  font-style: normal; font-size: 12px; color: var(--ink-mute); line-height: 1.55;
+}
+
+.reportevidence { padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
+.reportevidence > b { font-size: 13px; }
+.reportgrades { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 4px; }
+.reportgrades span {
+  font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase;
+  padding: 2px 7px; border-radius: 4px; background: var(--bg); color: var(--ink-mute);
+}
+.reportgrades .ghigh   { background: #e6f4ec; color: #14683a; }
+.reportgrades .gmedium { background: var(--warn-soft); color: var(--warn); }
+.reportgrades .glow    { background: #fdecea; color: var(--danger); }
+.reportgrades .gunavailable { border: 1px dashed var(--line); }
+
+.reportbeats { margin: 6px 0 0; padding-left: 16px; }
+.reportbeats li { font-size: 12.5px; line-height: 1.55; margin-bottom: 4px; color: var(--ink); }
+.reportbeats li.supports::marker { color: var(--ok); }
+.reportbeats li.weakens::marker  { color: var(--warn); }
+/* Missing evidence is marked, not muted — greying it out in print is the same
+   failure as leaving it out. */
+.reportbeats li.missing::marker  { color: var(--danger); }
+.reportmissing {
+  display: block; margin-top: 5px; font-style: normal;
+  font-size: 12px; color: var(--danger);
+}
+
+.reportforecast {
+  display: grid; grid-template-columns: 70px 1fr 1fr 90px; gap: 6px 12px;
+  margin: 10px 0; font-size: 12.5px; color: var(--ink);
+}
+.reportforecast small {
+  color: var(--ink-mute); font-size: 10.5px; letter-spacing: .07em;
+  text-transform: uppercase;
+}
+
+.reportsensitivity {
+  margin: 8px 0; padding: 10px 12px; border-radius: 8px;
+  font-size: 12.5px; line-height: 1.6; background: var(--bg);
+  border-left: 3px solid var(--line);
+}
+.reportsensitivity.changed { border-left-color: var(--warn); background: var(--warn-soft); }
+.reportsensitivity.steady  { border-left-color: var(--ok); }
+
+.reportlimits { margin: 8px 0 0; padding-left: 18px; }
+.reportlimits li {
+  font-size: 12.5px; line-height: 1.55; color: var(--ink-mute); margin-bottom: 5px;
+}
+
+/* ---------- guided walkthrough ---------- */
+
+/* Fixed, and deliberately not a modal: the presenter must stay able to click
+   the real interface and answer a question mid-step. A walkthrough that traps
+   whoever is giving the demo is worse than one they can step out of. */
+.demobar {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px;
+  z-index: 3000; width: min(860px, calc(100vw - 32px));
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 14px 44px rgba(16, 20, 26, .22);
+  padding: 13px 16px;
+}
+.demostep { display: flex; align-items: baseline; gap: 10px; }
+.democount {
+  font-size: 11px; font-weight: 800; letter-spacing: .08em;
+  color: #fff; background: var(--accent); border-radius: 5px; padding: 2px 7px;
+}
+.demostep b { font-size: 14px; }
+.demotext {
+  margin: 7px 0 10px; font-size: 13px; line-height: 1.6; color: var(--ink-soft);
+}
+.democtl { display: flex; gap: 8px; align-items: center; }
+.democtl button {
+  display: flex; align-items: center; gap: 5px;
+  border: 1px solid var(--line); background: var(--panel); color: inherit;
+  border-radius: 7px; padding: 6px 12px; font-size: 13px; font-weight: 600;
+  cursor: pointer;
+}
+.democtl button:disabled { opacity: .45; cursor: default; }
+.democtl .primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.democtl .ghost { margin-left: auto; color: var(--ink-mute); }
+
+/* The step's target — the REAL panel, outlined. Nothing is duplicated. */
+.demofocus {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 10px;
+  scroll-margin: 120px;
+}
+
+@media print { .demobar, .demofocus { display: revert; outline: 0; } .demobar { display: none; } }
+
+/* ---------- layout utilities lifted out of App.tsx ---------- */
+
+.app.fullmap { height: 100vh; display: flex; flex-direction: column; }
+.mapfill { flex: 1; min-height: 0; position: relative; }
+
+/* An eyebrow's right-hand detail: normal case, no tracking. */
+.eyebrowright { margin-left: auto; text-transform: none; letter-spacing: 0; }
+.eyebrow.flush { margin: 0; }
+.eyebrow.spaced { margin-top: 16px; }
+.timebar.spaced { margin-bottom: 10px; }
+
+.cardsub { margin-bottom: 6px; font-size: 12px; }
+.cardnote { margin-top: 10px; }
+.metrics.tight { margin-top: 4px; }
+.metrics.flush { margin-top: 0; }
+.metrics .span2 { grid-column: 1 / 3; }
+.metrics b.md { font-size: 14px; }
+.metrics b.lg { font-size: 17px; }

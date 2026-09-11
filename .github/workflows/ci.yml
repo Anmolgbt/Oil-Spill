@@ -1,0 +1,129 @@
+name: CI
+
+on:
+  push:
+    branches: [main, parth1]
+  pull_request:
+
+jobs:
+  backend:
+    name: Backend — install, import, serve
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      # torch is the bulk of this; the CPU wheel is what the app actually needs.
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu \
+                      -r backend/requirements.txt
+          pip install pytest
+
+      # The core suite: inverse closure, seeded determinism, the attribution
+      # arithmetic and its re-weighting rule, the CLEAR path, behaviour-failure
+      # statuses, the detour's keep-out promise, and the geo helpers. Small on
+      # purpose — it protects the science, not a coverage number.
+      - name: Backend tests
+        working-directory: backend
+        run: python -m pytest -q
+
+      # main.py imports as a top-level package, so uvicorn must start from backend/.
+      - name: Import the app
+        working-directory: backend
+        run: python -c "import main; print('ok')"
+
+      - name: Model artifacts load
+        working-directory: backend
+        run: |
+          python - <<'PY'
+          from ml.cnn_inference import model_info as cnn_info
+          from ml.ais_inference import model_info as ais_info
+          c = cnn_info()
+          assert c["available"], c
+          print("CNN loaded:", c["parameters"], "parameters")
+          a = ais_info()
+          assert a["available"], a
+          print("Isolation Forest loaded:", a["n_features"], "features")
+          PY
+
+      - name: Serve and exercise the API
+        working-directory: backend
+        run: |
+          python -m uvicorn main:app --port 8000 &
+          for i in $(seq 1 60); do
+            curl -sf localhost:8000/health >/dev/null && break
+            sleep 2
+          done
+          curl -sf localhost:8000/health | tee /dev/stderr | grep -q '"ok"'
+
+          # A clean pass must report CLEAR, and the last pass must detect.
+          curl -sf -X POST localhost:8000/fleet/scan \
+               -H 'content-type: application/json' -d '{"snapshot_id":"t1"}' \
+            | python -c "import json,sys; d=json.load(sys.stdin); assert d['status']=='CLEAR', d['status']; print('t1 CLEAR')"
+
+          curl -sf -X POST localhost:8000/fleet/scan \
+               -H 'content-type: application/json' -d '{"snapshot_id":"t3"}' \
+            > /tmp/scan.json
+          python - <<'PY'
+          import json
+          d = json.load(open("/tmp/scan.json"))
+          assert d["status"] == "SPILL_DETECTED", d["status"]
+          assert d["spills"], "no spills in payload"
+          print("t3 SPILL_DETECTED,", len(d["spills"]), "detections")
+
+          # The irrelevant-traffic filter must actually reject something. It was
+          # a no-op for a long time (a flat 50 km radius over a 21 x 38 km
+          # corpus), so this asserts the funnel narrows rather than passing
+          # everything through.
+          funnels = [sp["ais"]["funnel"] for sp in d["spills"]]
+          assert any(f["rejected_too_far"] > 0 for f in funnels), funnels
+          assert all(f["within_radius"] <= f["monitored"] for f in funnels), funnels
+          print("traffic filter rejects:", [f["rejected_too_far"] for f in funnels])
+
+          # The counterfactual must be the exact inverse of the hindcast: a probe
+          # placed on the estimated source has to reproduce the observation.
+          import urllib.request
+          sp = d["spills"][0]
+          body = json.dumps({
+              "mmsi": sp["candidates"][0]["mmsi"],
+              "release_at": sp["age"]["release_at"],
+              "spill_latitude": sp["spill"]["latitude"],
+              "spill_longitude": sp["spill"]["longitude"],
+              "age_hours": sp["age"]["estimated_hours"],
+              "envelope_radius_km": sp["affected_area"]["radius_km"],
+          }).encode()
+          r = json.load(urllib.request.urlopen(urllib.request.Request(
+              "http://localhost:8000/fleet/counterfactual", body,
+              {"content-type": "application/json"})))
+          assert r["available"], r
+          print("counterfactual ok, miss", r["miss_distance_km"], "km")
+          PY
+
+  frontend:
+    name: Frontend — typecheck and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        working-directory: frontend
+        run: npm ci
+
+      # `npm run build` is tsc -b followed by vite build, so this is the
+      # typecheck as well as the bundle.
+      - name: Typecheck and build
+        working-directory: frontend
+        run: npm run build
