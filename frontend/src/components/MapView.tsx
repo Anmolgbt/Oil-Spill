@@ -1,13 +1,13 @@
 import {useEffect} from "react";
-import {CircleMarker, MapContainer, Polygon, Polyline, TileLayer, Tooltip, useMap} from "react-leaflet";
+import {CircleMarker, LayersControl, MapContainer, Marker, Polygon, Polyline, TileLayer, Tooltip, useMap} from "react-leaflet";
 import L from "leaflet";
-import {Flame, Info, Wind} from "lucide-react";
+import {Flame, Info, Wind, Layers} from "lucide-react";
 import {show, showCoord, showPct} from "../lib/oiltrace";
 import {fmt} from "../ui";
 import {MAP_COLOURS as C} from "../mapColours";
 import {EnvironmentLayer} from "./EnvironmentLayer";
 import {ThermalHeatmapLayer} from "./ThermalHeatmapLayer";
-import type {Candidate, Counterfactual, Environment, ForecastHeatmap, LatLon, RiskEntry, Ship,
+import type {Candidate, Counterfactual, Environment, EnvironmentalDrift, ForecastHeatmap, LatLon, RiskEntry, Ship,
               Source, SourceHeatmap, Spill, AffectedArea, Forecast} from "../types";
 
 const FALLBACK_CENTER: [number, number] = [28.55, -94.85];
@@ -38,6 +38,7 @@ export interface MapViewProps {
   setLegendOpen: (fn: (v: boolean) => boolean) => void;
   /** The drift field overlay. Context, not a finding — off unless asked for. */
   environment?: Environment | null;
+  environmentalSource?: EnvironmentalDrift | null;
   showEnvironment?: boolean;
   setShowEnvironment?: (fn: (v: boolean) => boolean) => void;
   /** Spread of the hindcast point across the drift-assumption band. Sensitivity
@@ -49,6 +50,7 @@ export interface MapViewProps {
   mapStyle?: React.CSSProperties;
   /** Stage gates — see the note on the component. */
   showEnvelope?: boolean;
+  onToggleEnvelope?: () => void;
   showHindcast?: boolean;
   showForecast?: boolean;
   showRisk?: boolean;
@@ -74,7 +76,7 @@ function MapFit({points}: {points: [number, number][] | null}) {
     const t = window.setTimeout(fit, 350);
     window.addEventListener("resize", fit);
     return () => { window.clearTimeout(t); window.removeEventListener("resize", fit); };
-  }, [points && points.length, points && points[0][0]]);
+  }, [JSON.stringify(points)]);
   return null;
 }
 
@@ -87,20 +89,27 @@ function MapFit({points}: {points: [number, number][] | null}) {
 export function MapView({view, envelope, detected, shownSpill, shownArea, shownSource, source,
                    shownForecast, selectedRisk, selected, setSelected, fleet, riskByShipId,
                    legendOpen, setLegendOpen, mapStyle,
-                   environment = null, showEnvironment = false, setShowEnvironment,
+                   environment = null, environmentalSource = null, showEnvironment = false, setShowEnvironment,
                    sourceHeatmap = null, showSourceHeatmap = false, setShowSourceHeatmap,
                    forecastHeatmap = null,
                    // Stage gates. The overlays appear as the investigation reaches
                    // them, so the map never shows an estimated source before the
                    // hindcast that produced it has been run.
-                   showEnvelope = true, showHindcast = true, showForecast = true,
+                   showEnvelope = true, onToggleEnvelope, showHindcast = true, showForecast = true,
                    showRisk = true, candidateTracks = [], showDetour = true,
                    whatIfShown = null, replayFrame = null}: MapViewProps) {
   return (
     <MapContainer center={view?.center ?? FALLBACK_CENTER} zoom={7}
-                  className={"map" + (showSourceHeatmap ? " thermal-dark" : "")} style={mapStyle} scrollWheelZoom>
-      <MapFit points={view?.points ?? null} />
-      <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                  className="map" style={mapStyle} scrollWheelZoom>
+      <MapFit points={showDetour && selectedRisk?.detour
+        ? selectedRisk.detour.detour_waypoints.map((p) => [p.latitude, p.longitude] as [number, number])
+        : view?.points ?? null} />
+      <LayersControl position="topright">
+        <LayersControl.BaseLayer checked name="Satellite">
+          <TileLayer attribution='Imagery &copy; Esri, Maxar, Earthstar Geographics, GIS User Community' url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" maxZoom={19}/>
+        </LayersControl.BaseLayer>
+        <LayersControl.BaseLayer name="Street map"><TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" /></LayersControl.BaseLayer>
+      </LayersControl>
 
       {/* The conditions the envelope is sized from. Drawn FIRST so every
           finding renders above it — the field is background, not a result. */}
@@ -108,10 +117,12 @@ export function MapView({view, envelope, detected, shownSpill, shownArea, shownS
         <EnvironmentLayer environment={environment} points={view?.points ?? null} />
       )}
 
+      {showEnvironment && environmentalSource?.path && environmentalSource.path.length > 1 && <Polyline positions={environmentalSource.path.map((point) => [point.latitude, point.longitude] as [number, number])} pathOptions={{color: "#5bcfc6", weight: 2, dashArray: "5 5", opacity: .8}}><Tooltip>Wind/current hindcast</Tooltip></Polyline>}
+
       {/* possible affected area — drift envelope, never a measured slick */}
       {showEnvelope && envelope && (
-        <Polygon positions={envelope} pathOptions={{color: C.spill, fillColor: C.spill, fillOpacity: .05, weight: 1.5, dashArray: "5 6"}}>
-          <Tooltip>{shownSpill?.ship_name} · possible affected area, {fmt(shownArea?.radius_km)} km radius<br />Drift envelope, not a measured slick</Tooltip>
+        <Polygon positions={envelope} pathOptions={{color: C.spill, fillColor: C.spill, fillOpacity: .12, weight: 1.5, dashArray: "5 6"}}>
+          <Tooltip>{shownSpill?.ship_name} · possible affected area, {fmt(shownArea?.radius_km)} km radius<br />Potential exposure · not measured slick area</Tooltip>
         </Polygon>
       )}
 
@@ -134,19 +145,24 @@ export function MapView({view, envelope, detected, shownSpill, shownArea, shownS
           </Polyline>
           <CircleMarker center={[shownSource.latitude, shownSource.longitude]} radius={8}
                         pathOptions={{color: C.hindcast, fillColor: C.hindcastFill, fillOpacity: .9, weight: 3}}>
-            <Tooltip>Probable source — model estimate<br />{showCoord(shownSource.latitude)}, {showCoord(shownSource.longitude)}</Tooltip>
+            <Tooltip permanent direction="left" className="source-map-label">PROBABLE SOURCE<br />{showCoord(shownSource.latitude)}, {showCoord(shownSource.longitude)}</Tooltip>
           </CircleMarker>
         </>
       )}
+
+      {detected && shownSpill && !replayFrame && <CircleMarker center={[shownSpill.latitude, shownSpill.longitude]} radius={13}
+        pathOptions={{color: "#ef713f", fillColor: "#ef713f", fillOpacity: .7, weight: 2}}>
+        <Tooltip permanent direction="right" offset={[12, 0]} className="spill-map-label">DETECTED SPILL<br/><b>{showPct(shownSpill.confidence, 1)}</b></Tooltip>
+      </CircleMarker>}
 
       {/* forward kinematic projection */}
       {showForecast && detected && shownForecast?.points && shownForecast.points.length > 0 && shownSpill && (
         <>
           <Polyline positions={[[shownSpill.latitude, shownSpill.longitude], ...shownForecast.points.map((p: any) => [p.latitude, p.longitude] as [number, number])]}
-                    pathOptions={{color: C.forecast, weight: 2.5, dashArray: "2 7", opacity: .9}} />
+                    pathOptions={{color: "#62c7e8", weight: 2.5, dashArray: "2 7", opacity: .9}} />
           {shownForecast.points.map((p: any) => (
             <CircleMarker key={p.hours_ahead} center={[p.latitude, p.longitude]} radius={4}
-                          pathOptions={{color: C.forecast, fillColor: "#fff", fillOpacity: 1, weight: 2.5}}>
+                          pathOptions={{color: "#62c7e8", fillColor: "#fff", fillOpacity: 1, weight: 2.5}}>
               <Tooltip>+{p.hours_ahead} h · {showCoord(p.latitude, 4)}, {showCoord(p.longitude, 4)}<br />Kinematic projection</Tooltip>
             </CircleMarker>
           ))}
@@ -170,7 +186,7 @@ export function MapView({view, envelope, detected, shownSpill, shownArea, shownS
               <Tooltip>{selected.name} · SIMULATED ROUTE AVOIDANCE<br />
                 {fmt(selectedRisk.detour.original_heading_deg, 0)}° → {fmt(selectedRisk.detour.suggested_heading_deg, 0)}°
                 ({selectedRisk.detour.heading_change_deg > 0 ? "+" : ""}{fmt(selectedRisk.detour.heading_change_deg, 0)}°)<br />
-                Demo only — not navigation guidance</Tooltip>
+                Simulated route</Tooltip>
             </Polyline>
           )}
         </>
@@ -179,7 +195,7 @@ export function MapView({view, envelope, detected, shownSpill, shownArea, shownS
       {/* track of the selected vessel only, to keep the map readable */}
       {selected?.track && selected.track.length > 1 && (
         <Polyline positions={selected.track.map((p: any) => [p.lat, p.lon] as [number, number])}
-                  pathOptions={{color: C.track, weight: 2.5, opacity: .8}}>
+                  pathOptions={{color: "#96cee0", weight: 2.5, opacity: .9}}>
           <Tooltip>{selected.name} · AIS track (where it has been)</Tooltip>
         </Polyline>
       )}
@@ -191,7 +207,7 @@ export function MapView({view, envelope, detected, shownSpill, shownArea, shownS
       {candidateTracks.map((c: any) => (
         <Polyline key={c.ship_id}
                   positions={c.points}
-                  pathOptions={{color: C.candidateTrack, weight: 1.5, opacity: .3, dashArray: "3 4"}}>
+                  pathOptions={{color: "#7fadc0", weight: 1.5, opacity: .6, dashArray: "3 4"}}>
           <Tooltip>#{c.rank} {c.name} · AIS track<br />
             closest {fmt(c.minimum_distance_km, 2)} km · score {fmt(c.final_suspect_score)}</Tooltip>
         </Polyline>
@@ -227,10 +243,10 @@ export function MapView({view, envelope, detected, shownSpill, shownArea, shownS
           }}>
           <Tooltip permanent direction="top" offset={[0, -12]}>
             {replayFrame.slick.basis === "observed"
-              ? "OBSERVED — the pass the CNN classified"
+              ? "OBSERVED"
               : replayFrame.slick.basis === "estimated"
-                ? "ESTIMATED — hindcast, nobody observed the oil here"
-                : "PROJECTED — kinematic forecast, no environmental data"}
+                ? "ESTIMATED"
+                : "PROJECTED"}
           </Tooltip>
         </CircleMarker>
       )}
@@ -289,17 +305,10 @@ export function MapView({view, envelope, detected, shownSpill, shownArea, shownS
         const oil = s.oil_detected && (!replayFrame || replayFrame.band === "observed"
                                        || replayFrame.band === "projected");
         return (
-          <CircleMarker
-            key={s.id}
-            center={centre}
-            radius={oil ? 10 : atRisk ? 8 : 6}
-            pathOptions={{
-              color: oil ? C.spill : atRisk ? C.atRisk : C.forecast,
-              fillColor: oil ? C.spillFill : C.vesselFill,
-              fillOpacity: projected ? .15 : (selected?.id === s.id ? 1 : .8),
-              weight: selected?.id === s.id ? 4 : (atRisk ? 3 : 2),
-              dashArray: projected ? "3 3" : (atRisk && !oil ? "3 2" : undefined),
-            }}
+          <Marker
+            key={s.id} position={centre}
+            icon={L.divIcon({className: "ship-marker", iconSize: [22, 26], iconAnchor: [11, 13], html:
+              `<svg viewBox="0 0 22 26" width="22" height="26" style="transform:rotate(${Number.isFinite(s.course_deg) ? s.course_deg : 0}deg)"><path d="M11 2 L18 20 L11 17 L4 20 Z" fill="${oil ? "#e65d39" : selected?.id === s.id ? "#922c45" : "#54aace"}" fill-opacity="${projected ? .4 : 1}" stroke="${selected?.id === s.id ? "#ffffff" : "#b9dfed"}" stroke-width="${selected?.id === s.id ? 2 : 1}"/></svg>`})}
             eventHandlers={{click: () => setSelected(s)}}
           >
             <Tooltip>
@@ -307,7 +316,7 @@ export function MapView({view, envelope, detected, shownSpill, shownArea, shownS
               {s.status}{s.confidence ? ` · ${showPct(s.confidence)}` : ""}
               {atRisk && <><br /><b>AT RISK</b> · entry ~{atRisk.estimated_entry_minutes} min</>}
             </Tooltip>
-          </CircleMarker>
+          </Marker>
         );
       })}
 
@@ -320,23 +329,24 @@ export function MapView({view, envelope, detected, shownSpill, shownArea, shownS
         {detected && <span><i style={{width: 18, height: 0, borderTop: `2px dotted ${C.forecast}`}} />Where it will drift next (48 h)</span>}
         {detected && <span><i style={{width: 18, height: 0, borderTop: `1px dashed ${C.spill}`}} />Possible affected area</span>}
         {detected && <span><i style={{width: 10, height: 10, borderRadius: "50%", border: `2px dashed ${C.atRisk}`, display: "inline-block"}} />Vessel at risk (forward projection)</span>}
-        {detected && <span><i style={{width: 18, height: 0, borderTop: `3px dashed ${C.detour}`}} />Simulated detour (demo only)</span>}
+        {detected && <span><i style={{width: 18, height: 0, borderTop: `3px dashed ${C.detour}`}} />Suggested route</span>}
         <span><i style={{width: 18, height: 0, borderTop: `2px dashed ${C.forecast}`}} />Selected vessel's projected track</span>
         {candidateTracks.length > 0 && (
           <span><i style={{width: 18, height: 0, borderTop: `2px dashed ${C.candidateTrack}`, opacity: .5}} />Other candidates' AIS tracks</span>
         )}
         {showEnvironment && (
           <span><i style={{width: 18, height: 0, borderTop: `2px ${environment?.environment_mode === "historical" ? "solid" : "dashed"} ${C.environment}`}} />
-            Effective drift{environment?.environment_mode === "historical" ? "" : " (assumed, uniform)"}</span>
+            Wind · current · resultant{environment?.environment_mode === "historical" ? "" : " (assumed)"}</span>
         )}
         {showSourceHeatmap && (
           <span>
             <i style={{width: 18, height: 8, borderRadius: 2, background:
               "linear-gradient(90deg,#22c55e,#a3e635,#facc15,#fb923c,#ef4444)"}} />
-            Where it came from / is heading — not a probability
+            Source / forecast spread
           </span>
         )}
       </div>}
+      {onToggleEnvelope && <button className={"legendbtn exposurebtn" + (showEnvelope ? " open" : "")} onClick={onToggleEnvelope} title="Potential exposure envelope" aria-label="Toggle potential exposure envelope" aria-pressed={showEnvelope}><Layers size={17}/></button>}
       {setShowEnvironment && (
         <button className={"legendbtn envbtn" + (showEnvironment ? " open" : "")}
                 onClick={() => setShowEnvironment((v: boolean) => !v)}
@@ -352,7 +362,7 @@ export function MapView({view, envelope, detected, shownSpill, shownArea, shownS
                 onClick={() => setShowSourceHeatmap((v: boolean) => !v)}
                 title={showSourceHeatmap
                   ? "Exit thermal view"
-                  : "Thermal view: dark map, where the oil likely came from and is heading"}
+                  : "Source and forecast spread"}
                 aria-label="Toggle thermal heat map" aria-pressed={showSourceHeatmap}>
           <Flame size={17} />
         </button>

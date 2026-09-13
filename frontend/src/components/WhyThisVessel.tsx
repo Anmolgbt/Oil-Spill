@@ -1,9 +1,8 @@
+import {useEffect, useId, useState} from "react";
 import {Badge, ScoreBar, fmt} from "../ui";
 import {MAP_COLOURS as C} from "../mapColours";
 import {NOT_AVAILABLE, showCoord} from "../lib/oiltrace";
-import {CandidateNarrative} from "./CandidateNarrative";
 import {CounterfactualLines} from "./CounterfactualLines";
-import {EvidenceQuality} from "./EvidenceQuality";
 import {OutcomeBanner} from "./OutcomeBanner";
 import type {Candidate, Counterfactual, Ais, Evidence, Robustness, RobustnessFlip,
               Ship, Spill, Traffic, Weights} from "../types";
@@ -41,13 +40,16 @@ export function WhyThisVessel({
   onSelectCandidate, causationProven, traffic, whatIf, whatIfBusy, whatIfKey, askWhatIf,
   evidence,
 }: WhyThisVesselProps) {
-  const evidenceByMmsi = Object.fromEntries(
-    (evidence?.candidates ?? []).map((e) => [e.mmsi, e]));
+  const [showAll, setShowAll] = useState(false);
+  const candidateListId = useId();
+  const candidateSet = shownCandidates.map((c) => c.mmsi).join(",");
+  useEffect(() => setShowAll(false), [shownSpill?.ship_id, candidateSet]);
+  const visibleCandidates = showAll ? shownCandidates : shownCandidates.slice(0, 5);
   return (
 
         <div className="oilstrip">
           <div className="eyebrow">
-            WHY THIS VESSEL? <Badge tone="amber">ANALYTICAL ASSOCIATION</Badge>
+            WHY THIS VESSEL?
             <span style={{marginLeft: "auto", textTransform: "none", letterSpacing: 0}}>
               {shownSpill?.ship_name} · {shownCandidates.length} vessel{shownCandidates.length === 1 ? "" : "s"}
               {shownAis?.search_radius_km != null && ` within ${fmt(shownAis.search_radius_km, 1)} km of the estimated source`}
@@ -77,14 +79,10 @@ export function WhyThisVessel({
               )}
             </div>
           )}
-          {shownAis?.search_radius_basis && (
-            <div className="funnelbasis">{shownAis.search_radius_basis}</div>
-          )}
 
           {shownCandidates.length === 0 ? (
             <div className="empty">
               No vessel was inside the search radius during the estimated release window.
-              Nothing is inferred to fill the gap.
             </div>
           ) : (
             <>
@@ -92,7 +90,8 @@ export function WhyThisVessel({
                 <span>#</span><span>Vessel</span><span>Closest approach</span>
                 <span>Trajectory</span><span>Score</span>
               </div>
-              {shownCandidates.map((c: Candidate) => {
+              <div id={candidateListId}>
+              {visibleCandidates.map((c: Candidate) => {
                 const isOpen = selected?.id === c.ship_id;
                 return (
                   <div key={c.mmsi} className="candwrap">
@@ -130,13 +129,7 @@ export function WhyThisVessel({
                           return (
                             <>
                               {c.scored_on_partial_evidence && (
-                                <div className="partialnote">
-                                  <b>Scored on partial evidence.</b>{" "}
-                                  {c.behaviour_reason ?? "One term was unavailable."}{" "}
-                                  The remaining terms were re-weighted to sum to 1 rather than
-                                  scoring the missing one as zero — a model that could not answer
-                                  is not evidence that the vessel behaved normally.
-                                </div>
+                                <div className="partialnote">Partial evidence · weights adjusted</div>
                               )}
                               <div className="scorebars">
                                 <ScoreBar label="PROXIMITY" value={c.proximity_score ?? null}
@@ -169,16 +162,8 @@ export function WhyThisVessel({
                           </span>
                           <b>= {fmt(c.final_suspect_score, 2)}</b>
                         </div>
-                        <div className="whynote">
-                          Proximity and trajectory are computed geometry against an
-                          <b> estimated</b> source and an <b>estimated</b> release window, so both
-                          inherit the hindcast's error. Behaviour is the Isolation Forest's own
-                          verdict on this vessel's real AIS track.
-                        </div>
 
-                        <CandidateNarrative
-                          narrative={evidenceByMmsi[c.mmsi]?.narrative} />
-                        <EvidenceQuality evidence={evidenceByMmsi[c.mmsi]} />
+
 
                         {/* The independent test. Ranking asks "was it nearby and
                             behaving oddly?"; this asks "would its oil actually
@@ -232,28 +217,8 @@ export function WhyThisVessel({
                                   </b>
                                 </div>
                               </div>
-                              <p className="whatifsay">
-                                {consistent
-                                  ? `Drifting ${res.name}'s real position forward puts the oil
-                                     ${fmt(res.miss_distance_km, 2)} km from where it was actually
-                                     seen — inside the ${fmt(res.consistency_radius_km ?? res.envelope_radius_km, 2)} km
-                                     this drift could have carried it. Under these assumptions this
-                                     vessel cannot be separated from the observation. That is
-                                     consistency, not proof.`
-                                  : `Drifting ${res.name}'s real position forward puts the oil
-                                     ${fmt(res.miss_distance_km, 2)} km away — beyond the
-                                     ${fmt(res.consistency_radius_km ?? res.envelope_radius_km, 2)} km
-                                     this drift could have carried it. On this test the observation
-                                     does not follow from this vessel having been the source,
-                                     whatever its ranking says.`}
-                              </p>
+                              <p className="whatifsay">Tolerance: {fmt(res.consistency_radius_km ?? res.envelope_radius_km, 2)} km</p>
                               <CounterfactualLines result={res} />
-                              <div className="whynote">
-                                {res.limits} The drift used here is the hindcast's own vector run
-                                forward, so the test is the exact inverse of the source estimate —
-                                which also means it inherits that estimate's assumptions rather
-                                than checking them.
-                              </div>
                             </div>
                           );
                         })()}
@@ -262,15 +227,20 @@ export function WhyThisVessel({
                   </div>
                 );
               })}
+              </div>
+              {shownCandidates.length > 5 && (
+                <div className="candidate-list-footer">
+                  <span>{showAll ? shownCandidates.length : 5} of {shownCandidates.length} candidates</span>
+                  <button className="reportbtn" aria-expanded={showAll}
+                          aria-controls={candidateListId} onClick={() => setShowAll((value) => !value)}>
+                    {showAll ? "Show top 5" : `View all ${shownCandidates.length} candidates`}
+                  </button>
+                </div>
+              )}
             </>
           )}
 
-          <div className="subtle" style={{marginTop: 8, fontSize: 12}}>
-            Ranking is analytical association with an estimated source and window — it does not
-            establish that any vessel caused the spill
-            {causationProven === false && ", and the system asserts no causation"}. Presence near a
-            probable source is a reason to look, not a finding of responsibility.
-          </div>
+          <div className="subtle" style={{marginTop: 8, fontSize: 12}}>Ranking does not establish responsibility.</div>
         </div>
   );
 }

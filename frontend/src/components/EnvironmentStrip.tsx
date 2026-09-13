@@ -29,16 +29,11 @@ export function EnvironmentStrip({environment: env}: EnvironmentStripProps) {
         ? `${fmt(env.current.speed_ms, 2)} m/s · ${fmt(env.current.direction_deg, 0)}°`
         : NOT_AVAILABLE}</b></span>
       {/* Genuinely absent: nothing in the pipeline consumes wave data. */}
-      <span>WAVE <b>{NOT_AVAILABLE}</b></span>
       <span>DRIFT <b>{env?.drift
         ? `${fmt(env.drift.speed_kmh, 2)} km/h · ${fmt(env.drift.direction_deg, 0)}°`
         : NOT_AVAILABLE}</b></span>
       <span style={{marginLeft: "auto"}} title={env?.environment_reason ?? undefined}>
-        {historical
-          ? <>Wind and current are <b>from historical data</b>{env.source ? ` (${env.source})` : ""} —
-             a reanalysis, which is itself a model output.</>
-          : <>Wind and current are <b>assumed values</b>, not measurements — no met-ocean
-             dataset is loaded.</>}
+        {historical ? "Historical data" : "Assumed conditions"}
       </span>
     </div>
   );

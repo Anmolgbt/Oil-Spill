@@ -45,16 +45,9 @@ export function RobustnessLine({robustness: r}: {robustness?: Robustness}) {
     <div className={"robustline " + r.classification.split(" ")[0]} title={r.rule}>
       <span className="robusttag">{ROBUST_LABEL[r.classification] ?? r.classification}</span>
       <span>
-        {Math.round(r.agreement_fraction * 100)}% of the swept drift band
-        {" "}({r.sweep.drift_speed_kmh[0]}–{r.sweep.drift_speed_kmh[1]} km/h,
-        {" "}{r.sweep.drift_bearing_deg[0]}–{r.sweep.drift_bearing_deg[1]}°) gives the same
-        verdict.{" "}
-        {first
-          ? <>It flips if {FLIP_PHRASE[axis](first)}.</>
-          : <>Nothing in that band changes it.</>}
-        {age && <> The verdict also depends on the age: it flips if the spill were
-          {" "}{age.delta} h {age.direction} than the {age.bound} h maximum.</>}
-        {" "}Sensitivity to an assumption — not an accuracy, and not a probability.
+        {Math.round(r.agreement_fraction * 100)}% agreement across tested drift assumptions.
+        {first && <> Flips if {FLIP_PHRASE[axis](first)}.</>}
+        {age && <> Age sensitivity: {age.delta} h {age.direction}.</>}
       </span>
     </div>
   );
@@ -96,24 +89,8 @@ export function ModeCompareLine({result}: {result: Counterfactual}) {
     <div className="modecompare" title={cmp.meaning}>
       <span className="modetag">Environment-aware</span>
       <span>
-        {agree
-          ? <>Same verdict — <b>{env.within_envelope ? "consistent" : "not consistent"}</b> — running the
-             drift through the environment field instead.</>
-          : <><b>Different verdict.</b> The environment-aware run finds this vessel{" "}
-             <b>{env.within_envelope ? "consistent" : "not consistent"}</b> where the shipped test
-             does not.</>}
-        {" "}Miss {fmt(env.miss_distance_km, 2)} km against {fmt(env.consistency_radius_km, 2)} km,
-        {" "}versus {fmt(cmp.legacy.miss_km, 2)} against {fmt(cmp.legacy.radius_km, 2)}.
-        {" "}That leaves it <b>{fmt(nowFrom, 2)} km</b> from the point where the verdict
-        would flip, {closer ? "against" : "up from"} <b>{fmt(wasFrom, 2)} km</b> —
-        {" "}{closer ? "closer to the boundary" : "further from it"}
-        {agree && closer && nowFrom < 1
-          ? <>, so the verdict holds but only just.</>
-          : <>.</>}
-        {" "}
-        {env.environment_mode === "historical"
-          ? "Sampled from the loaded dataset; a reanalysis is itself a model output."
-          : "No dataset is loaded, so this is a different assumed vector, not a measurement."}
+        <b>{agree ? "Same verdict" : "Different verdict"}</b> · {env.within_envelope ? "consistent" : "not consistent"}
+        {" · "}Miss {fmt(env.miss_distance_km, 2)} km · tolerance {fmt(env.consistency_radius_km, 2)} km
       </span>
     </div>
   );

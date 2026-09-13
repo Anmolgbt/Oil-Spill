@@ -83,9 +83,9 @@ export function VesselsAtRiskStrip({
             <div className="rerouteact">
                 <div className="rerouteout">
                   <div className="rerouteouthead">
-                    <b>RECOMMENDED REROUTE — {selected.name}</b>
+                    <b>ROUTE — {selected.name}</b>
                     <Badge tone={selectedRisk.detour.clears_spill_zone ? "ok" : "red"}>
-                      {selectedRisk.detour.clears_spill_zone ? "CLEARS THE ZONE" : "DOES NOT CLEAR"}
+                      {selectedRisk.detour.clears_spill_zone ? "CLEARS THE ZONE" : selectedRisk.detour.already_inside_zone ? "EXIT ROUTE" : "NO CLEAR ROUTE"}
                     </Badge>
                     {rerouteFor === selected.id ? (
                       <button className="undobtn" onClick={() => setRerouteFor(null)}>
@@ -93,7 +93,7 @@ export function VesselsAtRiskStrip({
                       </button>
                     ) : (
                       <button className="optimisebtn" onClick={() => setRerouteFor(selected.id)}>
-                        OPTIMIZE ROUTE <ChevronRight size={15} />
+                        SHOW ROUTE <ChevronRight size={15} />
                       </button>
                     )}
                   </div>
@@ -113,19 +113,12 @@ export function VesselsAtRiskStrip({
                       <b>{fmt(selectedRisk.detour.safety_buffer_km, 1)} km</b>
                     </div>
                   </div>
-                  <p className="subtle" style={{marginTop: 8, fontSize: 12.5}}>
-                    {selectedRisk.detour.reason} {selectedRisk.detour.note}
-                    {selectedRisk.detour.already_inside_zone &&
-                      " This vessel is already inside the area, so the first leg necessarily lies within it."}
-                  </p>
+
                 </div>
             </div>
           )}
 
-          <div className="subtle" style={{marginTop: 6, fontSize: 12}}>
-            Kinematic projection from each vessel's current speed/heading — a prototype trajectory, not a
-            navigational prediction. Detour headings are a SIMULATED ROUTE AVOIDANCE demo, not maritime guidance.
-          </div>
+          <div className="subtle" style={{marginTop: 6, fontSize: 12}}>Simulated route · requires navigation review</div>
         </div>
   );
 }

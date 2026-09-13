@@ -24,7 +24,7 @@ geometry. Nothing is a fixed offset.
 """
 from math import acos, atan2, cos, degrees, hypot, pi, sin
 
-from shapely.geometry import LineString
+from shapely.geometry import LineString, Point
 from shapely.ops import unary_union
 
 from core.config import RISK_SAFETY_BUFFER_KM
@@ -68,7 +68,7 @@ def _obstacle_circle(polygons, buffer_km=RISK_SAFETY_BUFFER_KM):
     center_lat, center_lon = centroid.y, centroid.x
     radius_km = max(
         haversine_km(center_lat, center_lon, y, x)
-        for x, y in buffered.exterior.coords
+        for x, y in buffered.convex_hull.exterior.coords
     )
     return {"lat": center_lat, "lon": center_lon, "radius_km": radius_km}
 
@@ -164,15 +164,16 @@ def suggest_detour(ship, polygons, horizon_hours, buffer_km=RISK_SAFETY_BUFFER_K
     original_destination = (destination(lat, lon, run_km, original_heading)
                             if run_km > 0 else (lat, lon))
 
-    radius = obstacle["radius_km"]
+    radius = obstacle["radius_km"] * ARC_CLEARANCE
     start = _to_xy(lat, lon, obstacle)
     end = _to_xy(original_destination[0], original_destination[1], obstacle)
 
     # What the route must not touch: the spill polygons as actually drawn.
     keep_out = unary_union([p["polygon"] for p in polygons])
 
-    inside = hypot(*start) <= radius
-    if inside:
+    inside = keep_out.covers(Point(lon, lat))
+    within_routing_circle = hypot(*start) <= radius
+    if within_routing_circle:
         route_xy, note = _exit_route(start, end, radius), (
             "Vessel is already inside the affected area — this is the shortest "
             "way out, so its first leg necessarily lies inside the zone."
@@ -182,16 +183,22 @@ def suggest_detour(ship, polygons, horizon_hours, buffer_km=RISK_SAFETY_BUFFER_K
         # so the vessel never "rejoins" into the oil.
         if hypot(*end) <= radius:
             scale = (radius * ARC_CLEARANCE) / max(hypot(*end), 1e-9)
-            end = (end[0] * scale, end[1] * scale)
+            end = ((end[0] * scale, end[1] * scale) if hypot(*end) > 1e-9
+                   else (-start[0] / hypot(*start) * radius * ARC_CLEARANCE,
+                         -start[1] / hypot(*start) * radius * ARC_CLEARANCE))
 
         valid = [r for r in _candidate_routes(start, end, radius)
                  if _clears(r, obstacle, keep_out)]
         # Every candidate rides outside the buffered circle, so `valid` is
         # normally all four; the check is what guarantees the promise.
-        route_xy = min(valid or _candidate_routes(start, end, radius),
-                       key=_route_length_km)
+        if not valid:
+            return None
+        route_xy = min(valid, key=_route_length_km)
         note = ("Prototype route-avoidance demonstration, not maritime "
                 "navigation guidance.")
+
+    if not inside and not _clears(route_xy, obstacle, keep_out):
+        return None
 
     waypoints = [_to_latlon(x, y, obstacle) for x, y in route_xy]
     waypoints[0] = (lat, lon)           # keep the vessel's exact fix
@@ -204,7 +211,7 @@ def suggest_detour(ship, polygons, horizon_hours, buffer_km=RISK_SAFETY_BUFFER_K
     labelled = [{"latitude": p[0], "longitude": p[1], "label": "detour waypoint"}
                 for p in waypoints]
     labelled[0]["label"] = "current position"
-    labelled[-1]["label"] = "rejoin original heading"
+    labelled[-1]["label"] = "exit zone" if within_routing_circle else "route endpoint"
 
     return {
         "ship_id": ship["id"], "mmsi": ship.get("mmsi"), "name": ship.get("name"),
@@ -220,7 +227,7 @@ def suggest_detour(ship, polygons, horizon_hours, buffer_km=RISK_SAFETY_BUFFER_K
         "detour_waypoints": labelled,
         "reason": ("Vessel is already inside the affected area." if inside else
                    "Projected route intersects the current or forecast spill zone."),
-        "note": note,
+        "note": "Simulated exit route." if within_routing_circle else note,
     }
 
 
@@ -236,6 +243,5 @@ def _exit_route(start_xy, end_xy, radius_km):
         scale = (radius_km * ARC_CLEARANCE) / distance
         exit_xy = (start_xy[0] * scale, start_xy[1] * scale)
 
-    if hypot(*end_xy) <= radius_km:
-        return [start_xy, exit_xy]
-    return [start_xy, exit_xy, end_xy]
+    # Stop outside the zone; a direct rejoin could cross it again.
+    return [start_xy, exit_xy]

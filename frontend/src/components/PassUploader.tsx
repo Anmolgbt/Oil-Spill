@@ -7,7 +7,7 @@ export interface PassUploaderProps {
   existing: string[];
   /** Called with the new pass id once it has been written. */
   onCreated: (snapshotId: string) => void;
-  onDeleted: () => void;
+  onDeleted: (snapshotId: string) => void;
   busy: boolean;
 }
 
@@ -66,7 +66,7 @@ export function PassUploader({existing, onCreated, onDeleted, busy}: PassUploade
     if (res?.error) { setStatus(res.error); return; }
     setResult(null);
     setStatus(`Removed ${id.toUpperCase()}.`);
-    onDeleted();
+    onDeleted(id);
   };
 
   return (
@@ -78,8 +78,8 @@ export function PassUploader({existing, onCreated, onDeleted, busy}: PassUploade
         onDrop={onDrop}
       >
         <div>
-          <b><Upload size={13} /> Drop SAR tiles to add a pass</b>
-          <small>They become the next pass and are scanned immediately.</small>
+          <b><Upload size={13} /> Add SAR observation</b>
+          <small>JPG · PNG · TIFF · BMP</small>
         </div>
         <div className="dropactions">
           <button onClick={() => folderRef.current?.click()} disabled={busy || sending}>

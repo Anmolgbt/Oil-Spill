@@ -1,6 +1,6 @@
+import {ModalFrame} from "./ModalFrame";
 import {useEffect, useState} from "react";
-import {Brain, Info, X} from "lucide-react";
-import {Badge} from "../ui";
+import {Brain, X} from "lucide-react";
 import {API, NOT_AVAILABLE} from "../lib/oiltrace";
 
 export interface ModelInfoModalProps {
@@ -83,24 +83,12 @@ export function ModelInfoModal({onClose}: ModelInfoModalProps) {
   }, []);
 
   return (
-    <div className="modal" role="dialog" aria-modal="true" aria-labelledby="modeltitle">
-      <div className="modalbox modelbox">
-        <button className="close" onClick={onClose} aria-label="Close"><X /></button>
-
-        <div className="reporthead">
-          <div>
-            <b>AI MODEL INTELLIGENCE</b>
-            <small>WHAT ACTUALLY POWERS THIS SYSTEM</small>
-          </div>
-          <Badge tone="blue">LIVE FROM ARTIFACTS</Badge>
-        </div>
-
+    <ModalFrame title="Model Info" onClose={onClose}>
         {error && <p className="reportempty">{error}</p>}
         {!data && !error && <p className="reportempty">Loading model information…</p>}
 
         {data && <ModelCards data={data} />}
-      </div>
-    </div>
+    </ModalFrame>
   );
 }
 
@@ -111,92 +99,11 @@ export function ModelInfoModal({onClose}: ModelInfoModalProps) {
 function ModelCards({data}: {data: ModelsPayload}) {
   const cnn = data.detection, ais = data.behaviour, attr = data.attribution;
 
-  return (
-          <>
-            <p className="flowintro">{data.separation}</p>
-
-            {/* ---- 1. detection ---- */}
-            <h3>1 · {cnn.name} — {cnn.kind}</h3>
-            <div className="reportgrid">
-              <div><small>ROLE</small><b>{cnn.role}</b></div>
-              <div><small>TASK</small><b>{cnn.task}</b></div>
-              <div><small>PARAMETERS</small><b>{cnn.parameters?.toLocaleString() ?? NOT_AVAILABLE}</b></div>
-              <div><small>RUNNING ON</small><b>{cnn.available ? (cnn.device ?? "loaded") : "Not loaded"}</b></div>
-            </div>
-            <p className="reportnote">
-              Input: {cnn.input?.format}, resized to {cnn.input?.size}
-              {cnn.input?.preprocessing && ` · ${cnn.input?.preprocessing.join(" → ")}`}.
-              {" "}Output: {cnn.output?.returns}.
-            </p>
-
-            <div className="reportgrid">
-              <div><small>ACCURACY</small><b>{pct(cnn.validation?.accuracy)}</b></div>
-              <div><small>PRECISION</small><b>{pct(cnn.validation?.precision)}</b></div>
-              <div><small>RECALL</small><b>{pct(cnn.validation?.recall)}</b></div>
-              <div><small>ROC-AUC</small><b>{pct(cnn.validation?.roc_auc)}</b></div>
-            </div>
-            <p className="reportnote">Measured on {cnn.validation_source}.</p>
-
-            <div className="modelstatement">{cnn.statement}</div>
-
-            {/* ---- 2. behaviour ---- */}
-            <h3>2 · {ais.name} — {ais.kind}</h3>
-            <div className="reportgrid">
-              <div><small>MODEL</small><b>{ais.model_type ?? NOT_AVAILABLE}</b></div>
-              <div><small>TREES</small><b>{ais.hyperparameters?.n_estimators ?? NOT_AVAILABLE}</b></div>
-              <div><small>CONTAMINATION</small><b>{ais.hyperparameters?.contamination ?? NOT_AVAILABLE}</b></div>
-              <div><small>FEATURES</small><b>{ais.input?.features?.length ?? NOT_AVAILABLE}</b></div>
-            </div>
-            <p className="reportnote">
-              Features, in the order the saved scaler pins:{" "}
-              <code>{(ais.input?.features ?? []).join(", ")}</code>.
-              {" "}{ais.output?.returns}. Normalisation is {ais.output?.normalisation} —
-              {" "}{ais.corpus_reason}
-            </p>
-            <div className="modelstatement">{ais.statement}</div>
-            {ais.known_flaw && (
-              <p className="reportnote">
-                <b>Known flaw, reproduced deliberately.</b> {ais.known_flaw.detail}
-              </p>
-            )}
-
-            {/* ---- 3. attribution — the distinction this card exists for ---- */}
-            <h3>3 · {attr.name} — {attr.kind}</h3>
-            <div className="reportgrid">
-              <div><small>PROXIMITY</small><b>{attr.weights.proximity.toFixed(2)}</b></div>
-              <div><small>TRAJECTORY</small><b>{attr.weights.trajectory.toFixed(2)}</b></div>
-              <div><small>BEHAVIOUR</small><b>{attr.weights.behaviour.toFixed(2)}</b></div>
-              <div><small>TRAINED MODEL?</small><b style={{color: "var(--warn)"}}>No</b></div>
-            </div>
-            <p className="reportnote">
-              {Object.entries(attr.components).map(([k, v]) => (
-                <span key={k}><b>{k}</b> — {v}<br /></span>
-              ))}
-              Search radius: {attr.search_radius.derivation}. {attr.search_radius.note}
-            </p>
-            <p className="reportnote">
-              <b>When a term is unavailable:</b> {attr.unavailable_term_rule.detail}
-            </p>
-            <div className="modelstatement warn">{attr.statement}</div>
-            <p className="reportnote">{attr.validation_note}</p>
-
-            {/* ---- limitations ---- */}
-            <h3>Limitations</h3>
-            <ul className="modellimits">
-              {[...(cnn.limitations ?? []), ...(ais.limitations ?? []),
-                ...(data.system_limitations ?? [])].map((l: string, i: number) => (
-                <li key={i}>{l}</li>
-              ))}
-            </ul>
-
-            <div className="disclaimer" style={{marginTop: 14}}>
-              <Info size={14} />
-              Every figure on this page is read from the model artifacts at request time.
-              Anything the artifacts do not carry is shown as "Not available" rather than
-              estimated.
-            </div>
-          </>
-  );
+  return <div className="model-summary">
+    <section><h3>Spill detection</h3><b>{cnn.name}</b><p>{cnn.input?.size ?? "SAR image"} → oil / no oil · confidence</p></section>
+    <section><h3>Vessel behaviour</h3><b>{ais.model_type ?? ais.name}</b><p>AIS track → anomaly score</p></section>
+    <section><h3>Attribution</h3><b>Weighted association</b><p>Proximity {Math.round(attr.weights.proximity * 100)}% · trajectory {Math.round(attr.weights.trajectory * 100)}% · behaviour {Math.round(attr.weights.behaviour * 100)}%</p></section>
+  </div>;
 }
 
 /** Header button that opens the card. */

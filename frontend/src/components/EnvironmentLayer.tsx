@@ -75,23 +75,25 @@ export function EnvironmentLayer({environment: env, points}: EnvironmentLayerPro
   const label = historical
     ? `Effective drift ${drift.speed_kmh} km/h toward ${drift.direction_deg}° · from historical data`
     : `Effective drift ${drift.speed_kmh} km/h toward ${drift.direction_deg}° · ASSUMED FIELD — UNIFORM`;
-  const detail = historical
-    ? "Sampled from the loaded dataset. A reanalysis is itself a model output."
-    : "No environmental dataset is loaded. Every arrow is identical because this is one assumed constant, not a measured field.";
 
   return (
     <>
       {nodes.map((n, i) => {
-        const a = arrow(n.lat, n.lon, drift.direction_deg as number);
+        const vector = i % 3 === 0 ? env?.wind : i % 3 === 1 ? env?.current : null;
+        const kind = i % 3 === 0 ? "Wind" : i % 3 === 1 ? "Current" : "Drift";
+        const bearing = vector?.direction_deg ?? drift.direction_deg as number;
+        const a = arrow(n.lat, n.lon, bearing);
+        const colour = kind === "Wind" ? "#b1d6e8" : kind === "Current" ? "#5bcfc6" : "#e2be6d";
+        const arrowLabel = vector ? `${kind} ${vector.speed_ms} m/s · ${bearing}° · ${historical ? "historical sample" : "assumed"}` : label;
         return (
           <Fragment key={i}>
             <Polyline positions={a.shaft} pathOptions={{
-              color: C.environment, weight: 2, opacity: historical ? 0.75 : 0.5,
+              color: colour, weight: 2, opacity: historical ? 0.75 : 0.5,
               dashArray: historical ? undefined : "4 3"}}>
-              <Tooltip>{label}<br />{detail}</Tooltip>
+              <Tooltip>{arrowLabel}</Tooltip>
             </Polyline>
             <Polyline positions={a.head} pathOptions={{
-              color: C.environment, weight: 2, opacity: historical ? 0.75 : 0.5}} />
+              color: colour, weight: 2, opacity: historical ? 0.75 : 0.5}} />
           </Fragment>
         );
       })}

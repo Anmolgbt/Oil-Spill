@@ -1,3 +1,4 @@
+import {GovernmentActions} from "../GovernmentActions";
 import {fmt} from "../../ui";
 import {NOT_AVAILABLE} from "../../lib/oiltrace";
 import type {Detour, RiskOverview, Ship, SpillEntry} from "../../types";
@@ -21,17 +22,10 @@ export function ReportRisk({risk, entry, reroute}: {
       <h3>Assets at risk</h3>
       {atRisk.length === 0 ? (
         <p className="reportempty">
-          No monitored vessel's projected track enters this spill's drift envelope
-          within {fmt(risk?.forecast_horizon_hours, 0)} h. Vessels that stay clear are
-          not listed.
+          No projected vessel exposure within {fmt(risk?.forecast_horizon_hours, 0)} h.
         </p>
       ) : (
         <>
-          <p className="reportnote">
-            Each vessel's current AIS fix projected forward at constant speed and course
-            against the drift envelope — a prototype trajectory, not a navigational
-            prediction. {risk?.vessels_checked} vessels checked, {risk?.safe_count} clear.
-          </p>
           {atRisk.map((r) => (
             <div className="reportcandidate" key={r.ship_id}>
               <b>{r.name}</b>
@@ -58,16 +52,13 @@ export function ReportRisk({risk, entry, reroute}: {
       ) : (
         <p className="reportempty">No response advice was generated for this detection.</p>
       )}
-      <p className="reportnote">
-        The priority score orders one spill against another. It is a triage ordering, not
-        a measure of harm done — no oil volume, thickness, shoreline proximity or habitat
-        data is involved anywhere in this system.
-      </p>
+
+      <GovernmentActions />
 
       {reroute && (
         <div className="reportcandidate">
           <b>Reroute — {reroute.ship.name}</b>
-          <strong>{reroute.detour.clears_spill_zone ? "clears" : "does not clear"}</strong>
+          <strong>{reroute.detour.clears_spill_zone ? "clears" : reroute.detour.already_inside_zone ? "exit route" : "does not clear"}</strong>
           <span>
             Heading {fmt(reroute.detour.original_heading_deg, 0)}° →{" "}
             {fmt(reroute.detour.suggested_heading_deg, 0)}°

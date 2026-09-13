@@ -1,3 +1,4 @@
+import {GovernmentActions} from "./GovernmentActions";
 import {Badge, fmt} from "../ui";
 import {MAP_COLOURS as C} from "../mapColours";
 import type {ResponsePriority, Ship, SpillEntry} from "../types";
@@ -59,11 +60,7 @@ export function ResponsePriorityStrip({
               </button>
             );
           })}
-          <div className="subtle" style={{marginTop: 6, fontSize: 12}}>
-            Priority score ranks spills against each other for response order — it is not a measure of harm
-            caused, oil volume or cost, and excludes shoreline proximity and habitat sensitivity. Escalation
-            advice only: this prototype does not model response assets, crews or arrival times.
-          </div>
+          <GovernmentActions />
         </div>
   );
 }

@@ -65,30 +65,19 @@ export function DriftComparison({divergence: d, legacySource, environmentalSourc
                                  spillName}: DriftComparisonProps) {
   if (!d) return null;
   const rank = d.ranking_change;
-  const historical = d.environment_mode === "historical";
 
   return (
     <div className="oilstrip">
       <div className="eyebrow">
-        DRIFT ASSUMPTION — WHAT IT CHANGES <Badge tone="blue">SENSITIVITY</Badge>
-        <span style={{marginLeft: "auto", textTransform: "none", letterSpacing: 0}}>
-          {spillName} · {historical ? "historical field" : "no environmental dataset loaded"}
-        </span>
+        DRIFT COMPARISON <Badge tone="blue">SENSITIVITY</Badge>
+
       </div>
 
       {/* The headline, when the assumption changes who is ranked first. */}
       {rank?.available && rank.top_changes && (
         <div className="rankflip">
           <AlertTriangle size={16} />
-          <span>
-            <b>The top candidate changes with the drift assumption.</b>{" "}
-            The shipped ranking puts <b>{rank.legacy_top}</b> first; re-ranked against the
-            environment-aware source — same fleet, same search radius, same behaviour
-            scores — <b>{rank.environmental_top}</b> is first instead. This is a
-            sensitivity of the attribution to an assumption nobody measured, the same
-            class of thing the per-candidate robustness line reports. It is not a sign
-            that either ranking is wrong, and neither is validated.
-          </span>
+          <span><b>Top candidate changes:</b> {rank.legacy_top} → {rank.environmental_top}</span>
         </div>
       )}
       {rank?.available && !rank.top_changes && (
@@ -174,11 +163,7 @@ export function DriftComparison({divergence: d, legacySource, environmentalSourc
 
       {/* The backend's own words, because this is the sentence that stops the
           panel being read backwards. */}
-      <div className="driftcause">
-        <Info size={14} />
-        <span>{d.cause} The shipped ranking, counterfactual, search radius and report all
-          use the legacy estimate.</span>
-      </div>
+
     </div>
   );
 }

@@ -219,3 +219,9 @@ export async function deletePass(snapshotId: string) {
     return {error: "Could not reach the backend."};
   }
 }
+
+/** Configured pass times, without running inference again. */
+export async function getFleetMetadata(): Promise<{snapshot_times?: Record<string, string>} | null> {
+  return tryFetch(`${API}/fleet`);
+}
+export const imageSource = (path?: string | null) => !path ? undefined : /^https?:\/\//.test(path) || path.startsWith("/ai-data/") ? path : `${API}${path}`;

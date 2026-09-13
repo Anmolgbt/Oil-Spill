@@ -50,13 +50,10 @@ export function OutcomeBanner({assessment}: OutcomeBannerProps) {
         <b>{title}</b>
         <span className="outcomecount">
           {assessment.consistent_count} of {assessment.candidate_count} candidate
-          {assessment.candidate_count === 1 ? "" : "s"} consistent with the observation
+          {assessment.candidate_count === 1 ? "" : "s"} consistent
         </span>
       </div>
-      <ul className="outcomereasons">
-        {assessment.reasons.map((r, i) => <li key={i}>{r}</li>)}
-      </ul>
-      <div className="outcomemeans">{assessment.means}</div>
+
     </div>
   );
 }

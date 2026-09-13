@@ -33,8 +33,8 @@ export interface ThermalHeatmapLayerProps {
 // the canvas layer below from the genuine spread of re-run hindcast/forecast
 // points; nothing here is a hand-assigned per-point weight.
 const GRADIENT: Record<number, string> = {
-  0.20: "#22c55e",
-  0.40: "#a3e635",
+  0.20: "#e6be55",
+  0.40: "#facc15",
   0.60: "#facc15",
   0.80: "#fb923c",
   1.00: "#ef4444",

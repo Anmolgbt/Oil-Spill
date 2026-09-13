@@ -45,6 +45,9 @@ export interface Ship {
 }
 
 export interface Spill {
+  prediction?: string;
+  note?: string;
+  measured_area_km2?: number | null;
   ship_id: string;
   ship_name: string;
   mmsi?: number;
@@ -55,6 +58,7 @@ export interface Spill {
 }
 
 export interface Source extends LatLon {
+  confidence?: number | null;
   hours_backward?: number;
   drift_speed_kmh?: number;
   drift_direction_deg?: number;
@@ -117,6 +121,8 @@ export interface ForecastPoint extends LatLon {
 }
 
 export interface Forecast {
+  drift_speed_kmh?: number;
+  drift_direction_deg?: number;
   points?: ForecastPoint[];
   type?: string;
   label?: string;
@@ -442,6 +448,7 @@ export interface Evidence {
 }
 
 export interface Scan {
+  synthetic_fleet?: boolean;
   status: "SPILL_DETECTED" | "CLEAR" | string;
   message?: string;
   mode?: string;
