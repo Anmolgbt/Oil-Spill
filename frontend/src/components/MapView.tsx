@@ -326,13 +326,26 @@ export function MapView({view, envelope, detected, shownSpill, spills = [], onSe
         </>
       )}
 
-      {/* monitored vessels — an amber ring marks a vessel FORWARD RISK
-          flagged as projected to enter the spill area (separate from
-          the oil-detected red fill, which is the CNN's own call). */}
+      {/* Always-on risk radii live in their own Leaflet layer. Keeping them
+          separate from the ship icon means selection and route visibility can
+          never remove the red/amber warning ring. */}
+      {fleet.map((s: any) => {
+        const atRisk = riskByShipId[s.id];
+        if (!atRisk?.detour) return null;
+        const rp = replayFrame?.vessels?.find((v: any) => v.sh.id === s.id)?.at;
+        const centre: [number, number] = rp ? [rp.lat, rp.lon] : [s.latitude, s.longitude];
+        const ring = atRisk.risk === "HIGH" ? "#ef4444" : "#f4b400";
+        return <CircleMarker key={`risk-radius-${s.id}`} center={centre} radius={14}
+          pathOptions={{color: ring, fillColor: ring, fillOpacity: .1, weight: 2.5}}
+          eventHandlers={{click: () => setSelected(s)}}>
+          <Tooltip><b>{s.name}</b><br />AT RISK · simulated reroute ready</Tooltip>
+        </CircleMarker>;
+      })}
+
+      {/* monitored vessel symbols render above the permanent risk radii */}
       {fleet.map((s: any) => {
         const atRisk = riskByShipId[s.id];
         const rerouted = Boolean(atRisk?.detour);
-        const rerouteRing = atRisk?.risk === "HIGH" ? "#ef4444" : "#f4b400";
         // Under replay the vessel sits where the timeline puts it, and a
         // hollow marker says that position is projected, not reported.
         const rp = replayFrame?.vessels?.find((v: any) => v.sh.id === s.id)?.at;
@@ -345,8 +358,8 @@ export function MapView({view, envelope, detected, shownSpill, spills = [], onSe
         return (
           <Marker
             key={s.id} position={centre}
-            icon={L.divIcon({className: `ship-marker${rerouted ? " rerouted" : ""}`, iconSize: [32, 32], iconAnchor: [16, 16], html:
-              `<svg viewBox="0 0 32 32" width="32" height="32">${rerouted ? `<circle cx="16" cy="16" r="12" fill="${rerouteRing}" fill-opacity=".16" stroke="${rerouteRing}" stroke-width="2.25"/>` : ""}<g transform="translate(5 3) rotate(${Number.isFinite(s.course_deg) ? s.course_deg : 0} 11 13)"><path d="M11 2 L18 20 L11 17 L4 20 Z" fill="${oil ? "#e65d39" : selected?.id === s.id ? "#922c45" : "#54aace"}" fill-opacity="${projected ? .4 : 1}" stroke="${selected?.id === s.id ? "#ffffff" : "#b9dfed"}" stroke-width="${selected?.id === s.id ? 2 : 1}"/></g></svg>`})}
+            icon={L.divIcon({className: `ship-marker${rerouted ? " rerouted" : ""}`, iconSize: [22, 26], iconAnchor: [11, 13], html:
+              `<svg viewBox="0 0 22 26" width="22" height="26" style="transform:rotate(${Number.isFinite(s.course_deg) ? s.course_deg : 0}deg)"><path d="M11 2 L18 20 L11 17 L4 20 Z" fill="${oil ? "#e65d39" : selected?.id === s.id ? "#922c45" : "#54aace"}" fill-opacity="${projected ? .4 : 1}" stroke="${selected?.id === s.id ? "#ffffff" : "#b9dfed"}" stroke-width="${selected?.id === s.id ? 2 : 1}"/></svg>`})}
             eventHandlers={{click: () => setSelected(s)}}
           >
             <Tooltip>
