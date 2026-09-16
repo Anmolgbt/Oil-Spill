@@ -1,7 +1,7 @@
 import {useEffect} from "react";
 import {CircleMarker, LayersControl, MapContainer, Marker, Polygon, Polyline, TileLayer, Tooltip, useMap} from "react-leaflet";
 import L from "leaflet";
-import {Flame, Info, Wind, Layers} from "lucide-react";
+import {Flame, Info, Wind, CircleDashed} from "lucide-react";
 import {show, showCoord, showPct} from "../lib/oiltrace";
 import {fmt} from "../ui";
 import {MAP_COLOURS as C} from "../mapColours";
@@ -25,6 +25,8 @@ export interface MapViewProps {
   envelope: [number, number][] | null;
   detected: boolean;
   shownSpill?: Spill | null;
+  spills?: Spill[];
+  onSelectSpill?: (shipId: string) => void;
   shownArea?: AffectedArea | null;
   shownSource?: Source | null;
   source?: Source | null;
@@ -108,7 +110,8 @@ function MapResize() {
  * "Open map in new tab", for a screen where the docked map panel is too
  * small to comfortably pan/zoom).
  */
-export function MapView({view, envelope, detected, shownSpill, shownArea, shownSource, source,
+export function MapView({view, envelope, detected, shownSpill, spills = [], onSelectSpill,
+                   shownArea, shownSource, source,
                    shownForecast, selectedRisk, selected, setSelected, fleet, riskByShipId,
                    legendOpen, setLegendOpen, mapStyle,
                    environment = null, environmentalSource = null, showEnvironment = false, setShowEnvironment,
@@ -168,15 +171,25 @@ export function MapView({view, envelope, detected, shownSpill, shownArea, shownS
           </Polyline>
           <CircleMarker center={[shownSource.latitude, shownSource.longitude]} radius={8}
                         pathOptions={{color: C.hindcast, fillColor: C.hindcastFill, fillOpacity: .9, weight: 3}}>
-            <Tooltip permanent direction="left" className="source-map-label">PROBABLE SOURCE<br />{showCoord(shownSource.latitude)}, {showCoord(shownSource.longitude)}</Tooltip>
+            <Tooltip direction="left" className="source-map-label">PROBABLE SOURCE<br />{showCoord(shownSource.latitude)}, {showCoord(shownSource.longitude)}</Tooltip>
           </CircleMarker>
         </>
       )}
 
-      {detected && shownSpill && !replayFrame && <CircleMarker center={[shownSpill.latitude, shownSpill.longitude]} radius={13}
-        pathOptions={{color: "#ef713f", fillColor: "#ef713f", fillOpacity: .7, weight: 2}}>
-        <Tooltip permanent direction="right" offset={[12, 0]} className="spill-map-label">DETECTED SPILL<br/><b>{showPct(shownSpill.confidence, 1)}</b></Tooltip>
-      </CircleMarker>}
+      {/* Every detected spill stays visible. The focused one is slightly larger;
+          selecting another marker switches the investigation context to it. */}
+      {detected && !replayFrame && (spills.length ? spills : shownSpill ? [shownSpill] : []).map((spill) => {
+        const focused = spill.ship_id === shownSpill?.ship_id;
+        return <CircleMarker key={spill.ship_id} center={[spill.latitude, spill.longitude]}
+          radius={focused ? 13 : 10}
+          pathOptions={{color: "#ef713f", fillColor: "#ef713f", fillOpacity: focused ? .75 : .5,
+                        weight: focused ? 2.5 : 2, dashArray: focused ? undefined : "4 3"}}
+          eventHandlers={{click: () => onSelectSpill?.(spill.ship_id)}}>
+          <Tooltip direction="right" offset={[12, 0]} className="spill-map-label">
+            DETECTED SPILL · {spill.ship_name}<br/><b>{showPct(spill.confidence, 1)}</b>
+          </Tooltip>
+        </CircleMarker>;
+      })}
 
       {/* forward kinematic projection */}
       {showForecast && detected && shownForecast?.points && shownForecast.points.length > 0 && shownSpill && (
@@ -318,6 +331,8 @@ export function MapView({view, envelope, detected, shownSpill, shownArea, shownS
           the oil-detected red fill, which is the CNN's own call). */}
       {fleet.map((s: any) => {
         const atRisk = riskByShipId[s.id];
+        const rerouted = Boolean(atRisk?.detour);
+        const rerouteRing = atRisk?.risk === "HIGH" ? "#ef4444" : "#f4b400";
         // Under replay the vessel sits where the timeline puts it, and a
         // hollow marker says that position is projected, not reported.
         const rp = replayFrame?.vessels?.find((v: any) => v.sh.id === s.id)?.at;
@@ -330,14 +345,15 @@ export function MapView({view, envelope, detected, shownSpill, shownArea, shownS
         return (
           <Marker
             key={s.id} position={centre}
-            icon={L.divIcon({className: "ship-marker", iconSize: [22, 26], iconAnchor: [11, 13], html:
-              `<svg viewBox="0 0 22 26" width="22" height="26" style="transform:rotate(${Number.isFinite(s.course_deg) ? s.course_deg : 0}deg)"><path d="M11 2 L18 20 L11 17 L4 20 Z" fill="${oil ? "#e65d39" : selected?.id === s.id ? "#922c45" : "#54aace"}" fill-opacity="${projected ? .4 : 1}" stroke="${selected?.id === s.id ? "#ffffff" : "#b9dfed"}" stroke-width="${selected?.id === s.id ? 2 : 1}"/></svg>`})}
+            icon={L.divIcon({className: `ship-marker${rerouted ? " rerouted" : ""}`, iconSize: [32, 32], iconAnchor: [16, 16], html:
+              `<svg viewBox="0 0 32 32" width="32" height="32">${rerouted ? `<circle cx="16" cy="16" r="12" fill="${rerouteRing}" fill-opacity=".16" stroke="${rerouteRing}" stroke-width="2.25"/>` : ""}<g transform="translate(5 3) rotate(${Number.isFinite(s.course_deg) ? s.course_deg : 0} 11 13)"><path d="M11 2 L18 20 L11 17 L4 20 Z" fill="${oil ? "#e65d39" : selected?.id === s.id ? "#922c45" : "#54aace"}" fill-opacity="${projected ? .4 : 1}" stroke="${selected?.id === s.id ? "#ffffff" : "#b9dfed"}" stroke-width="${selected?.id === s.id ? 2 : 1}"/></g></svg>`})}
             eventHandlers={{click: () => setSelected(s)}}
           >
             <Tooltip>
               <b>{s.name}</b><br />MMSI {s.mmsi}<br />
               {s.status}{s.confidence ? ` · ${showPct(s.confidence)}` : ""}
               {atRisk && <><br /><b>AT RISK</b> · entry ~{atRisk.estimated_entry_minutes} min</>}
+              {rerouted && <><br /><b>SIMULATED REROUTE READY</b></>}
             </Tooltip>
           </Marker>
         );
@@ -351,7 +367,7 @@ export function MapView({view, envelope, detected, shownSpill, shownArea, shownS
         {detected && <span><i style={{width: 18, height: 0, borderTop: `3px solid ${C.hindcast}`}} />Where the oil drifted from ({show(source?.hours_backward)} h)</span>}
         {detected && <span><i style={{width: 18, height: 0, borderTop: `2px dotted ${C.forecast}`}} />Where it will drift next (48 h)</span>}
         {detected && <span><i style={{width: 18, height: 0, borderTop: `1px dashed ${C.spill}`}} />Possible affected area</span>}
-        {detected && <span><i style={{width: 10, height: 10, borderRadius: "50%", border: `2px dashed ${C.atRisk}`, display: "inline-block"}} />Vessel at risk (forward projection)</span>}
+        {detected && <span><i style={{width: 10, height: 10, borderRadius: "50%", border: `2px solid ${C.atRisk}`, boxShadow: `0 0 5px ${C.atRisk}`, display: "inline-block"}} />At risk · simulated reroute ready</span>}
         {detected && <span><i style={{width: 18, height: 0, borderTop: `3px dashed ${C.detour}`}} />Suggested route</span>}
         <span><i style={{width: 18, height: 0, borderTop: `2px dashed ${C.forecast}`}} />Selected vessel's projected track</span>
         {candidateTracks.length > 0 && (
@@ -369,7 +385,7 @@ export function MapView({view, envelope, detected, shownSpill, shownArea, shownS
           </span>
         )}
       </div>}
-      {onToggleEnvelope && <button className={"legendbtn exposurebtn" + (showEnvelope ? " open" : "")} onClick={onToggleEnvelope} title="Potential exposure envelope" aria-label="Toggle potential exposure envelope" aria-pressed={showEnvelope}><Layers size={17}/></button>}
+      {onToggleEnvelope && <button className={"legendbtn exposurebtn" + (showEnvelope ? " open" : "")} onClick={onToggleEnvelope} title="Potential exposure envelope" aria-label="Toggle potential exposure envelope" aria-pressed={showEnvelope}><CircleDashed size={17}/></button>}
       {setShowEnvironment && (
         <button className={"legendbtn envbtn" + (showEnvironment ? " open" : "")}
                 onClick={() => setShowEnvironment((v: boolean) => !v)}

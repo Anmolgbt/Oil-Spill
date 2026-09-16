@@ -239,10 +239,11 @@ button { font: inherit; color: inherit; }
 .legendbtn:hover { border-color: var(--accent); color: var(--accent); }
 .legendbtn.open { background: var(--accent); border-color: var(--accent); color: #fff; }
 .legend {
-  position: absolute; z-index: 500; bottom: 52px; left: 12px;
+  position: absolute; z-index: 500; bottom: 12px; left: 56px;
   background: rgba(255, 255, 255, .95); border: 1px solid var(--line);
   border-radius: 8px; padding: 10px 12px; display: grid; gap: 6px; font-size: 12px;
   box-shadow: 0 2px 10px rgba(16, 20, 26, .08);
+  max-height: calc(100% - 24px); overflow-y: auto;
 }
 .legend b { font-size: 11px; letter-spacing: .1em; color: var(--ink-mute); }
 .legend span { display: flex; align-items: center; gap: 8px; color: var(--ink-soft); }
@@ -503,7 +504,7 @@ button { font: inherit; color: inherit; }
 .robustline.highly .robusttag { color: var(--danger); }
 .legendbtn.envbtn { bottom: 52px; }
 .legendbtn.heatbtn { bottom: 92px; }
-.legend { bottom: 92px; }
+.legend { bottom: 12px; }
 .driftrow .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 .rosette { width: 120px; height: 120px; display: block; margin: 0 auto; }
 .oilhead.rankcmp {

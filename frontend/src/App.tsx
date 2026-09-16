@@ -208,9 +208,7 @@ function App() {
     () => Object.fromEntries((shownRisk?.at_risk || []).map((r: RiskEntry) => [r.ship_id, r])),
     [shownRisk]
   );
-  const selectedRisk = selected
-    ? shown?.risk?.at_risk.find((risk) => risk.ship_id === selected.id)
-    : undefined;
+  const selectedRisk = selected ? riskByShipId[selected.id] : undefined;
   // Selecting an at-risk vessel shows its detour immediately — no extra click.
   // Its original (projected) path is drawn unconditionally by MapView already;
   // this is the piece that used to require a separate "Show route" press.
@@ -331,10 +329,18 @@ function App() {
   if (!scan) return <div className="loading">Loading OILTRACE AI…</div>;
   const incidentId = `OT-${scan.observed_at?.slice(0, 10).replace(/-/g, "") ?? "STORED"}-${Math.max(0, shownSpillIndex) + 1}`;
   const mapProps = {
-    view, envelope, detected, shownSpill, shownArea, shownSource, source,
+    view, envelope, detected, shownSpill, spills: allSpills.map((entry) => entry.spill),
+    onSelectSpill: (shipId: string) => {
+      setFocusedSpillId(shipId);
+      const ship = fleet.find((item: Ship) => item.id === shipId);
+      if (ship) setSelected(ship);
+      setRerouteFor(null);
+    },
+    shownArea, shownSource, source,
     showEnvelope, onToggleEnvelope: () => setShowEnvelope((value) => !value),
     shownForecast, selectedRisk, selected, setSelected: (ship: Ship) => {
-      setSelected(ship); setEvidenceMmsi(ship.mmsi); setFocusedSpillId(shownSpill?.ship_id ?? null);
+      setSelected(ship); setEvidenceMmsi(ship.mmsi);
+      setFocusedSpillId(riskByShipId[ship.id]?.spill_ship_id ?? spillFor(ship)?.spill.ship_id ?? shownSpill?.ship_id ?? null);
       setRerouteFor(rerouteOnSelect(ship.id));
     }, fleet, riskByShipId, legendOpen, setLegendOpen,
     environment: scan.environment, showEnvironment, setShowEnvironment,
