@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, parth1]
+    branches: [main, parth1, "v2-(final_round)"]
   pull_request:
 
 jobs:
