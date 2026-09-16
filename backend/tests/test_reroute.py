@@ -27,24 +27,26 @@ def test_inside_route_exits_without_crossing_back():
     result = suggest_detour(ship(lon=-0.02), [{"polygon": polygon}], 2)
     assert result["already_inside_zone"]
     assert not result["clears_spill_zone"]
-    assert len(result["detour_waypoints"]) == 2
-    endpoint = result["detour_waypoints"][-1]
-    assert not polygon.covers(Point(endpoint["longitude"], endpoint["latitude"]))
-    assert endpoint["longitude"] < -0.02
+    assert len(result["detour_waypoints"]) >= 3
+    exit_point = result["detour_waypoints"][1]
+    assert not polygon.covers(Point(exit_point["longitude"], exit_point["latitude"]))
+    onward = LineString([(p["longitude"], p["latitude"])
+                          for p in result["detour_waypoints"][1:]])
+    assert not onward.intersects(polygon)
 
 
 def test_nearby_inside_routes_can_fan_to_opposite_sides():
     polygon = circle_polygon(0, 0, 5)
     left = suggest_detour(ship(lon=-0.02), [{"polygon": polygon}], 2, exit_side=-1)
     right = suggest_detour(ship(lon=-0.02), [{"polygon": polygon}], 2, exit_side=1)
-    left_end = left["detour_waypoints"][-1]
-    right_end = right["detour_waypoints"][-1]
+    left_exit = left["detour_waypoints"][1]
+    right_exit = right["detour_waypoints"][1]
 
     assert left["already_inside_zone"] and right["already_inside_zone"]
-    assert left_end["longitude"] < 0
-    assert right_end["longitude"] > 0
-    assert not polygon.covers(Point(left_end["longitude"], left_end["latitude"]))
-    assert not polygon.covers(Point(right_end["longitude"], right_end["latitude"]))
+    assert left_exit["longitude"] < 0
+    assert right_exit["longitude"] > 0
+    assert not polygon.covers(Point(left_exit["longitude"], left_exit["latitude"]))
+    assert not polygon.covers(Point(right_exit["longitude"], right_exit["latitude"]))
 
 
 def test_destination_at_obstacle_center():

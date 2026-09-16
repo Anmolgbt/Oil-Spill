@@ -174,20 +174,32 @@ def suggest_detour(ship, polygons, horizon_hours, buffer_km=RISK_SAFETY_BUFFER_K
 
     inside = keep_out.covers(Point(lon, lat))
     within_routing_circle = hypot(*start) <= radius
+
+    # A projected endpoint can itself land inside the obstacle. Put it just
+    # outside first so both ordinary detours and inside-zone exits have a safe
+    # place to finish.
+    if hypot(*end) <= radius:
+        scale = (radius * ARC_CLEARANCE) / max(hypot(*end), 1e-9)
+        end = ((end[0] * scale, end[1] * scale) if hypot(*end) > 1e-9
+               else (-start[0] / max(hypot(*start), 1e-9) * radius * ARC_CLEARANCE,
+                     -start[1] / max(hypot(*start), 1e-9) * radius * ARC_CLEARANCE))
+
     if within_routing_circle:
-        route_xy, note = _exit_route(start, end, radius, exit_side), (
+        exit_route = _exit_route(start, end, radius, exit_side)
+        exit_point = exit_route[-1]
+        if _clears([exit_point, end], obstacle, keep_out):
+            continuation = [exit_point, end]
+        else:
+            valid = [r for r in _candidate_routes(exit_point, end, radius)
+                     if _clears(r, obstacle, keep_out)]
+            continuation = min(valid, key=_route_length_km) if valid else [exit_point]
+        route_xy = [start, *continuation]
+        note = (
             "Vessel is already inside the affected area — this is the shortest "
-            "way out, so its first leg necessarily lies inside the zone."
+            "way out followed by a simulated onward route; its first leg "
+            "necessarily lies inside the zone."
         )
     else:
-        # Push a destination that sits inside the zone back out to the boundary,
-        # so the vessel never "rejoins" into the oil.
-        if hypot(*end) <= radius:
-            scale = (radius * ARC_CLEARANCE) / max(hypot(*end), 1e-9)
-            end = ((end[0] * scale, end[1] * scale) if hypot(*end) > 1e-9
-                   else (-start[0] / hypot(*start) * radius * ARC_CLEARANCE,
-                         -start[1] / hypot(*start) * radius * ARC_CLEARANCE))
-
         valid = [r for r in _candidate_routes(start, end, radius)
                  if _clears(r, obstacle, keep_out)]
         # Every candidate rides outside the buffered circle, so `valid` is
@@ -212,7 +224,7 @@ def suggest_detour(ship, polygons, horizon_hours, buffer_km=RISK_SAFETY_BUFFER_K
     labelled = [{"latitude": p[0], "longitude": p[1], "label": "detour waypoint"}
                 for p in waypoints]
     labelled[0]["label"] = "current position"
-    labelled[-1]["label"] = "exit zone" if within_routing_circle else "route endpoint"
+    labelled[-1]["label"] = "route endpoint"
 
     return {
         "ship_id": ship["id"], "mmsi": ship.get("mmsi"), "name": ship.get("name"),
@@ -229,7 +241,7 @@ def suggest_detour(ship, polygons, horizon_hours, buffer_km=RISK_SAFETY_BUFFER_K
         "detour_waypoints": labelled,
         "reason": ("Vessel is already inside the affected area." if inside else
                    "Projected route intersects the current or forecast spill zone."),
-        "note": "Simulated exit route." if within_routing_circle else note,
+        "note": "Simulated exit and onward route." if within_routing_circle else note,
     }
 
 
