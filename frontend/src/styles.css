@@ -909,7 +909,6 @@ button { font: inherit; color: inherit; }
 .case-section { padding-top: 28px; }
 .case-workstation .map-caption { gap: 9px 14px; }
 .case-workstation .map-caption span { font-size: 8px; }}
-.legendbtn.exposurebtn { bottom: 132px; }
 .report-sar { display: block; width: 140px; height: 115px; object-fit: contain; background: #132d40; margin: 12px 0; border-radius: 3px; }
 .report-provenance, .report-evidence-notes p { font-size: 10px; color: #7d929f; line-height: 1.6; }
 .report-candidate-table td { white-space: normal; font-size: 10px; }

@@ -1,7 +1,7 @@
 import {useEffect} from "react";
 import {CircleMarker, LayersControl, MapContainer, Marker, Polygon, Polyline, TileLayer, Tooltip, useMap} from "react-leaflet";
 import L from "leaflet";
-import {Flame, Info, Wind, CircleDashed} from "lucide-react";
+import {Flame, Info, Wind} from "lucide-react";
 import {show, showCoord, showPct} from "../lib/oiltrace";
 import {fmt} from "../ui";
 import {MAP_COLOURS as C} from "../mapColours";
@@ -23,6 +23,7 @@ export interface ReplayFrame {
 export interface MapViewProps {
   view: {center: [number, number]; points: [number, number][]} | null;
   envelope: [number, number][] | null;
+  spillEnvelopes?: {spill: Spill; area: AffectedArea; positions: [number, number][]}[];
   detected: boolean;
   shownSpill?: Spill | null;
   spills?: Spill[];
@@ -51,8 +52,6 @@ export interface MapViewProps {
   setShowSourceHeatmap?: (fn: (v: boolean) => boolean) => void;
   mapStyle?: React.CSSProperties;
   /** Stage gates — see the note on the component. */
-  showEnvelope?: boolean;
-  onToggleEnvelope?: () => void;
   showHindcast?: boolean;
   showForecast?: boolean;
   showRisk?: boolean;
@@ -110,7 +109,7 @@ function MapResize() {
  * "Open map in new tab", for a screen where the docked map panel is too
  * small to comfortably pan/zoom).
  */
-export function MapView({view, envelope, detected, shownSpill, spills = [], onSelectSpill,
+export function MapView({view, envelope, spillEnvelopes = [], detected, shownSpill, spills = [], onSelectSpill,
                    shownArea, shownSource, source,
                    shownForecast, selectedRisk, selected, setSelected, fleet, riskByShipId,
                    legendOpen, setLegendOpen, mapStyle,
@@ -120,7 +119,7 @@ export function MapView({view, envelope, detected, shownSpill, spills = [], onSe
                    // Stage gates. The overlays appear as the investigation reaches
                    // them, so the map never shows an estimated source before the
                    // hindcast that produced it has been run.
-                   showEnvelope = true, onToggleEnvelope, showHindcast = true, showForecast = true,
+                   showHindcast = true, showForecast = true,
                    showRisk = true, candidateTracks = [], showDetour = true,
                    whatIfShown = null, replayFrame = null}: MapViewProps) {
   return (
@@ -145,12 +144,22 @@ export function MapView({view, envelope, detected, shownSpill, spills = [], onSe
 
       {showEnvironment && environmentalSource?.path && environmentalSource.path.length > 1 && <Polyline positions={environmentalSource.path.map((point) => [point.latitude, point.longitude] as [number, number])} pathOptions={{color: "#5bcfc6", weight: 2, dashArray: "5 5", opacity: .8}}><Tooltip>Wind/current hindcast</Tooltip></Polyline>}
 
-      {/* possible affected area — drift envelope, never a measured slick */}
-      {showEnvelope && envelope && (
-        <Polygon positions={envelope} pathOptions={{color: C.spill, fillColor: C.spill, fillOpacity: .12, weight: 1.5, dashArray: "5 6"}}>
-          <Tooltip>{shownSpill?.ship_name} · possible affected area, {fmt(shownArea?.radius_km)} km radius<br />Potential exposure · not measured slick area</Tooltip>
-        </Polygon>
-      )}
+      {/* Every detected leak keeps its affected-area radius on the map. These
+          are modelled exposure envelopes, never measured slick boundaries. */}
+      {(spillEnvelopes.length
+        ? spillEnvelopes
+        : envelope && shownSpill && shownArea
+          ? [{spill: shownSpill, area: shownArea, positions: envelope}]
+          : []).map(({spill, area, positions}) => {
+            const focused = spill.ship_id === shownSpill?.ship_id;
+            return <Polygon key={`spill-envelope-${spill.ship_id}`} positions={positions}
+              pathOptions={{color: C.spill, fillColor: C.spill,
+                            fillOpacity: focused ? .12 : .07,
+                            opacity: focused ? .95 : .7,
+                            weight: focused ? 2 : 1.5, dashArray: "5 6"}}>
+              <Tooltip>{spill.ship_name} · possible affected area, {fmt(area.radius_km)} km radius<br />Potential exposure · not measured slick area</Tooltip>
+            </Polygon>;
+          })}
 
       {/* Thermal spread — where the source estimate and the forecast land
           across the drift-assumption band. Drawn first so the point marker
@@ -398,7 +407,6 @@ export function MapView({view, envelope, detected, shownSpill, spills = [], onSe
           </span>
         )}
       </div>}
-      {onToggleEnvelope && <button className={"legendbtn exposurebtn" + (showEnvelope ? " open" : "")} onClick={onToggleEnvelope} title="Potential exposure envelope" aria-label="Toggle potential exposure envelope" aria-pressed={showEnvelope}><CircleDashed size={17}/></button>}
       {setShowEnvironment && (
         <button className={"legendbtn envbtn" + (showEnvironment ? " open" : "")}
                 onClick={() => setShowEnvironment((v: boolean) => !v)}
