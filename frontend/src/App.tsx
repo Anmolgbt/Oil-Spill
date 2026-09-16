@@ -48,7 +48,6 @@ function App() {
   const [fallback, setFallback] = useState(false);
   const [legendOpen, setLegendOpen] = useState(false);
   // The drift field is context, not a finding, so it starts hidden.
-  const [showEnvelope, setShowEnvelope] = useState(true);
   const [showEnvironment, setShowEnvironment] = useState(true);
   const [showSourceHeatmap, setShowSourceHeatmap] = useState(true);
   // Which spill the map overlays follow. Separate from `selected` (the vessel
@@ -190,6 +189,11 @@ function App() {
   // The report describes the spill currently in view. Without this it always
   // described spills[0], which is wrong the moment a pass has two detections.
   const allSpills = scan?.spills || [];
+  const spillEnvelopes = allSpills.flatMap((entry: SpillEntry) => {
+    const radius = entry.affected_area?.radius_km;
+    return radius ? [{spill: entry.spill, area: entry.affected_area!,
+      positions: ring(entry.spill.latitude, entry.spill.longitude, radius)}] : [];
+  });
   const shownSpillIndex = allSpills.findIndex(
     (sp: SpillEntry) => sp.spill?.ship_id === shownSpill?.ship_id
   );
@@ -208,9 +212,7 @@ function App() {
     () => Object.fromEntries((shownRisk?.at_risk || []).map((r: RiskEntry) => [r.ship_id, r])),
     [shownRisk]
   );
-  const selectedRisk = selected
-    ? shown?.risk?.at_risk.find((risk) => risk.ship_id === selected.id)
-    : undefined;
+  const selectedRisk = selected ? riskByShipId[selected.id] : undefined;
   // Selecting an at-risk vessel shows its detour immediately — no extra click.
   // Its original (projected) path is drawn unconditionally by MapView already;
   // this is the piece that used to require a separate "Show route" press.
@@ -331,10 +333,18 @@ function App() {
   if (!scan) return <div className="loading">Loading OILTRACE AI…</div>;
   const incidentId = `OT-${scan.observed_at?.slice(0, 10).replace(/-/g, "") ?? "STORED"}-${Math.max(0, shownSpillIndex) + 1}`;
   const mapProps = {
-    view, envelope, detected, shownSpill, shownArea, shownSource, source,
-    showEnvelope, onToggleEnvelope: () => setShowEnvelope((value) => !value),
+    view, envelope, spillEnvelopes, detected, shownSpill,
+    spills: allSpills.map((entry) => entry.spill),
+    onSelectSpill: (shipId: string) => {
+      setFocusedSpillId(shipId);
+      const ship = fleet.find((item: Ship) => item.id === shipId);
+      if (ship) setSelected(ship);
+      setRerouteFor(null);
+    },
+    shownArea, shownSource, source,
     shownForecast, selectedRisk, selected, setSelected: (ship: Ship) => {
-      setSelected(ship); setEvidenceMmsi(ship.mmsi); setFocusedSpillId(shownSpill?.ship_id ?? null);
+      setSelected(ship); setEvidenceMmsi(ship.mmsi);
+      setFocusedSpillId(riskByShipId[ship.id]?.spill_ship_id ?? spillFor(ship)?.spill.ship_id ?? shownSpill?.ship_id ?? null);
       setRerouteFor(rerouteOnSelect(ship.id));
     }, fleet, riskByShipId, legendOpen, setLegendOpen,
     environment: scan.environment, showEnvironment, setShowEnvironment,

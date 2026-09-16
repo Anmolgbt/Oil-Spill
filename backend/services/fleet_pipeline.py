@@ -996,9 +996,14 @@ def run_fleet_scan(snapshot_id=None):
         risk = assess_fleet(scan["ships"], spill_entry)
         polygons = spill_polygons(spill_entry, max_hours_ahead=risk["forecast_horizon_hours"])
         ships_by_id = {s["id"]: s for s in scan["ships"]}
-        for entry in risk["at_risk"]:
+        for detour_index, entry in enumerate(risk["at_risk"]):
             ship = ships_by_id.get(entry["ship_id"])
-            detour = suggest_detour(ship, polygons, risk["forecast_horizon_hours"]) if ship else None
+            # Alternate the side used by inside-zone exit routes so nearby
+            # vessels visibly fan left/right rather than stacking on one line.
+            exit_side = 1 if detour_index % 2 == 0 else -1
+            detour = suggest_detour(
+                ship, polygons, risk["forecast_horizon_hours"], exit_side=exit_side
+            ) if ship else None
             entry["detour"] = detour
         spill_entry["risk"] = risk
 

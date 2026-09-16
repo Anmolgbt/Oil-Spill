@@ -144,7 +144,8 @@ def _clears(route_xy, centre, keep_out):
     return not line.intersects(keep_out)
 
 
-def suggest_detour(ship, polygons, horizon_hours, buffer_km=RISK_SAFETY_BUFFER_KM):
+def suggest_detour(ship, polygons, horizon_hours, buffer_km=RISK_SAFETY_BUFFER_KM,
+                   exit_side=0):
     """
     A route around the buffered spill polygons for one at-risk vessel, plus the
     resulting heading change. Returns None if there is no obstacle to route
@@ -173,20 +174,32 @@ def suggest_detour(ship, polygons, horizon_hours, buffer_km=RISK_SAFETY_BUFFER_K
 
     inside = keep_out.covers(Point(lon, lat))
     within_routing_circle = hypot(*start) <= radius
+
+    # A projected endpoint can itself land inside the obstacle. Put it just
+    # outside first so both ordinary detours and inside-zone exits have a safe
+    # place to finish.
+    if hypot(*end) <= radius:
+        scale = (radius * ARC_CLEARANCE) / max(hypot(*end), 1e-9)
+        end = ((end[0] * scale, end[1] * scale) if hypot(*end) > 1e-9
+               else (-start[0] / max(hypot(*start), 1e-9) * radius * ARC_CLEARANCE,
+                     -start[1] / max(hypot(*start), 1e-9) * radius * ARC_CLEARANCE))
+
     if within_routing_circle:
-        route_xy, note = _exit_route(start, end, radius), (
+        exit_route = _exit_route(start, end, radius, exit_side)
+        exit_point = exit_route[-1]
+        if _clears([exit_point, end], obstacle, keep_out):
+            continuation = [exit_point, end]
+        else:
+            valid = [r for r in _candidate_routes(exit_point, end, radius)
+                     if _clears(r, obstacle, keep_out)]
+            continuation = min(valid, key=_route_length_km) if valid else [exit_point]
+        route_xy = [start, *continuation]
+        note = (
             "Vessel is already inside the affected area — this is the shortest "
-            "way out, so its first leg necessarily lies inside the zone."
+            "way out followed by a simulated onward route; its first leg "
+            "necessarily lies inside the zone."
         )
     else:
-        # Push a destination that sits inside the zone back out to the boundary,
-        # so the vessel never "rejoins" into the oil.
-        if hypot(*end) <= radius:
-            scale = (radius * ARC_CLEARANCE) / max(hypot(*end), 1e-9)
-            end = ((end[0] * scale, end[1] * scale) if hypot(*end) > 1e-9
-                   else (-start[0] / hypot(*start) * radius * ARC_CLEARANCE,
-                         -start[1] / hypot(*start) * radius * ARC_CLEARANCE))
-
         valid = [r for r in _candidate_routes(start, end, radius)
                  if _clears(r, obstacle, keep_out)]
         # Every candidate rides outside the buffered circle, so `valid` is
@@ -211,7 +224,7 @@ def suggest_detour(ship, polygons, horizon_hours, buffer_km=RISK_SAFETY_BUFFER_K
     labelled = [{"latitude": p[0], "longitude": p[1], "label": "detour waypoint"}
                 for p in waypoints]
     labelled[0]["label"] = "current position"
-    labelled[-1]["label"] = "exit zone" if within_routing_circle else "route endpoint"
+    labelled[-1]["label"] = "route endpoint"
 
     return {
         "ship_id": ship["id"], "mmsi": ship.get("mmsi"), "name": ship.get("name"),
@@ -228,21 +241,26 @@ def suggest_detour(ship, polygons, horizon_hours, buffer_km=RISK_SAFETY_BUFFER_K
         "detour_waypoints": labelled,
         "reason": ("Vessel is already inside the affected area." if inside else
                    "Projected route intersects the current or forecast spill zone."),
-        "note": "Simulated exit route." if within_routing_circle else note,
+        "note": "Simulated exit and onward route." if within_routing_circle else note,
     }
 
 
-def _exit_route(start_xy, end_xy, radius_km):
+def _exit_route(start_xy, end_xy, radius_km, exit_side=0):
     """
     Shortest way out for a vessel already inside the zone: straight out along
     its own radius to the boundary, then on toward where it was going.
     """
     distance = hypot(*start_xy)
+    # When nearby vessels need an exit at the same time, fan them to opposite
+    # sides instead of drawing routes on top of one another. Negative is map
+    # left/west, positive is map right/east; zero keeps the shortest radial exit.
+    exit_angle = (pi if exit_side < 0 else 0.0) if exit_side else atan2(start_xy[1], start_xy[0])
     if distance < 1e-9:                  # dead centre: pick any direction
-        exit_xy = (radius_km * ARC_CLEARANCE, 0.0)
+        exit_xy = (radius_km * ARC_CLEARANCE * cos(exit_angle),
+                   radius_km * ARC_CLEARANCE * sin(exit_angle))
     else:
-        scale = (radius_km * ARC_CLEARANCE) / distance
-        exit_xy = (start_xy[0] * scale, start_xy[1] * scale)
+        exit_xy = (radius_km * ARC_CLEARANCE * cos(exit_angle),
+                   radius_km * ARC_CLEARANCE * sin(exit_angle))
 
     # Stop outside the zone; a direct rejoin could cross it again.
     return [start_xy, exit_xy]

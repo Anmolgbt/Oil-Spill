@@ -1,7 +1,7 @@
 import {useEffect} from "react";
 import {CircleMarker, LayersControl, MapContainer, Marker, Polygon, Polyline, TileLayer, Tooltip, useMap} from "react-leaflet";
 import L from "leaflet";
-import {Flame, Info, Wind, Layers} from "lucide-react";
+import {Flame, Info, Wind} from "lucide-react";
 import {show, showCoord, showPct} from "../lib/oiltrace";
 import {fmt} from "../ui";
 import {MAP_COLOURS as C} from "../mapColours";
@@ -23,8 +23,11 @@ export interface ReplayFrame {
 export interface MapViewProps {
   view: {center: [number, number]; points: [number, number][]} | null;
   envelope: [number, number][] | null;
+  spillEnvelopes?: {spill: Spill; area: AffectedArea; positions: [number, number][]}[];
   detected: boolean;
   shownSpill?: Spill | null;
+  spills?: Spill[];
+  onSelectSpill?: (shipId: string) => void;
   shownArea?: AffectedArea | null;
   shownSource?: Source | null;
   source?: Source | null;
@@ -49,8 +52,6 @@ export interface MapViewProps {
   setShowSourceHeatmap?: (fn: (v: boolean) => boolean) => void;
   mapStyle?: React.CSSProperties;
   /** Stage gates — see the note on the component. */
-  showEnvelope?: boolean;
-  onToggleEnvelope?: () => void;
   showHindcast?: boolean;
   showForecast?: boolean;
   showRisk?: boolean;
@@ -108,7 +109,8 @@ function MapResize() {
  * "Open map in new tab", for a screen where the docked map panel is too
  * small to comfortably pan/zoom).
  */
-export function MapView({view, envelope, detected, shownSpill, shownArea, shownSource, source,
+export function MapView({view, envelope, spillEnvelopes = [], detected, shownSpill, spills = [], onSelectSpill,
+                   shownArea, shownSource, source,
                    shownForecast, selectedRisk, selected, setSelected, fleet, riskByShipId,
                    legendOpen, setLegendOpen, mapStyle,
                    environment = null, environmentalSource = null, showEnvironment = false, setShowEnvironment,
@@ -117,7 +119,7 @@ export function MapView({view, envelope, detected, shownSpill, shownArea, shownS
                    // Stage gates. The overlays appear as the investigation reaches
                    // them, so the map never shows an estimated source before the
                    // hindcast that produced it has been run.
-                   showEnvelope = true, onToggleEnvelope, showHindcast = true, showForecast = true,
+                   showHindcast = true, showForecast = true,
                    showRisk = true, candidateTracks = [], showDetour = true,
                    whatIfShown = null, replayFrame = null}: MapViewProps) {
   return (
@@ -142,12 +144,22 @@ export function MapView({view, envelope, detected, shownSpill, shownArea, shownS
 
       {showEnvironment && environmentalSource?.path && environmentalSource.path.length > 1 && <Polyline positions={environmentalSource.path.map((point) => [point.latitude, point.longitude] as [number, number])} pathOptions={{color: "#5bcfc6", weight: 2, dashArray: "5 5", opacity: .8}}><Tooltip>Wind/current hindcast</Tooltip></Polyline>}
 
-      {/* possible affected area — drift envelope, never a measured slick */}
-      {showEnvelope && envelope && (
-        <Polygon positions={envelope} pathOptions={{color: C.spill, fillColor: C.spill, fillOpacity: .12, weight: 1.5, dashArray: "5 6"}}>
-          <Tooltip>{shownSpill?.ship_name} · possible affected area, {fmt(shownArea?.radius_km)} km radius<br />Potential exposure · not measured slick area</Tooltip>
-        </Polygon>
-      )}
+      {/* Every detected leak keeps its affected-area radius on the map. These
+          are modelled exposure envelopes, never measured slick boundaries. */}
+      {(spillEnvelopes.length
+        ? spillEnvelopes
+        : envelope && shownSpill && shownArea
+          ? [{spill: shownSpill, area: shownArea, positions: envelope}]
+          : []).map(({spill, area, positions}) => {
+            const focused = spill.ship_id === shownSpill?.ship_id;
+            return <Polygon key={`spill-envelope-${spill.ship_id}`} positions={positions}
+              pathOptions={{color: C.spill, fillColor: C.spill,
+                            fillOpacity: focused ? .12 : .07,
+                            opacity: focused ? .95 : .7,
+                            weight: focused ? 2 : 1.5, dashArray: "5 6"}}>
+              <Tooltip>{spill.ship_name} · possible affected area, {fmt(area.radius_km)} km radius<br />Potential exposure · not measured slick area</Tooltip>
+            </Polygon>;
+          })}
 
       {/* Thermal spread — where the source estimate and the forecast land
           across the drift-assumption band. Drawn first so the point marker
@@ -168,15 +180,25 @@ export function MapView({view, envelope, detected, shownSpill, shownArea, shownS
           </Polyline>
           <CircleMarker center={[shownSource.latitude, shownSource.longitude]} radius={8}
                         pathOptions={{color: C.hindcast, fillColor: C.hindcastFill, fillOpacity: .9, weight: 3}}>
-            <Tooltip permanent direction="left" className="source-map-label">PROBABLE SOURCE<br />{showCoord(shownSource.latitude)}, {showCoord(shownSource.longitude)}</Tooltip>
+            <Tooltip direction="left" className="source-map-label">PROBABLE SOURCE<br />{showCoord(shownSource.latitude)}, {showCoord(shownSource.longitude)}</Tooltip>
           </CircleMarker>
         </>
       )}
 
-      {detected && shownSpill && !replayFrame && <CircleMarker center={[shownSpill.latitude, shownSpill.longitude]} radius={13}
-        pathOptions={{color: "#ef713f", fillColor: "#ef713f", fillOpacity: .7, weight: 2}}>
-        <Tooltip permanent direction="right" offset={[12, 0]} className="spill-map-label">DETECTED SPILL<br/><b>{showPct(shownSpill.confidence, 1)}</b></Tooltip>
-      </CircleMarker>}
+      {/* Every detected spill stays visible. The focused one is slightly larger;
+          selecting another marker switches the investigation context to it. */}
+      {detected && !replayFrame && (spills.length ? spills : shownSpill ? [shownSpill] : []).map((spill) => {
+        const focused = spill.ship_id === shownSpill?.ship_id;
+        return <CircleMarker key={spill.ship_id} center={[spill.latitude, spill.longitude]}
+          radius={focused ? 13 : 10}
+          pathOptions={{color: "#ef713f", fillColor: "#ef713f", fillOpacity: focused ? .75 : .5,
+                        weight: focused ? 2.5 : 2, dashArray: focused ? undefined : "4 3"}}
+          eventHandlers={{click: () => onSelectSpill?.(spill.ship_id)}}>
+          <Tooltip direction="right" offset={[12, 0]} className="spill-map-label">
+            DETECTED SPILL · {spill.ship_name}<br/><b>{showPct(spill.confidence, 1)}</b>
+          </Tooltip>
+        </CircleMarker>;
+      })}
 
       {/* forward kinematic projection */}
       {showForecast && detected && shownForecast?.points && shownForecast.points.length > 0 && shownSpill && (
@@ -313,11 +335,26 @@ export function MapView({view, envelope, detected, shownSpill, shownArea, shownS
         </>
       )}
 
-      {/* monitored vessels — an amber ring marks a vessel FORWARD RISK
-          flagged as projected to enter the spill area (separate from
-          the oil-detected red fill, which is the CNN's own call). */}
+      {/* Always-on risk radii live in their own Leaflet layer. Keeping them
+          separate from the ship icon means selection and route visibility can
+          never remove the red/amber warning ring. */}
       {fleet.map((s: any) => {
         const atRisk = riskByShipId[s.id];
+        if (!atRisk?.detour) return null;
+        const rp = replayFrame?.vessels?.find((v: any) => v.sh.id === s.id)?.at;
+        const centre: [number, number] = rp ? [rp.lat, rp.lon] : [s.latitude, s.longitude];
+        const ring = atRisk.risk === "HIGH" ? "#ef4444" : "#f4b400";
+        return <CircleMarker key={`risk-radius-${s.id}`} center={centre} radius={14}
+          pathOptions={{color: ring, fillColor: ring, fillOpacity: .1, weight: 2.5}}
+          eventHandlers={{click: () => setSelected(s)}}>
+          <Tooltip><b>{s.name}</b><br />AT RISK · simulated reroute ready</Tooltip>
+        </CircleMarker>;
+      })}
+
+      {/* monitored vessel symbols render above the permanent risk radii */}
+      {fleet.map((s: any) => {
+        const atRisk = riskByShipId[s.id];
+        const rerouted = Boolean(atRisk?.detour);
         // Under replay the vessel sits where the timeline puts it, and a
         // hollow marker says that position is projected, not reported.
         const rp = replayFrame?.vessels?.find((v: any) => v.sh.id === s.id)?.at;
@@ -330,7 +367,7 @@ export function MapView({view, envelope, detected, shownSpill, shownArea, shownS
         return (
           <Marker
             key={s.id} position={centre}
-            icon={L.divIcon({className: "ship-marker", iconSize: [22, 26], iconAnchor: [11, 13], html:
+            icon={L.divIcon({className: `ship-marker${rerouted ? " rerouted" : ""}`, iconSize: [22, 26], iconAnchor: [11, 13], html:
               `<svg viewBox="0 0 22 26" width="22" height="26" style="transform:rotate(${Number.isFinite(s.course_deg) ? s.course_deg : 0}deg)"><path d="M11 2 L18 20 L11 17 L4 20 Z" fill="${oil ? "#e65d39" : selected?.id === s.id ? "#922c45" : "#54aace"}" fill-opacity="${projected ? .4 : 1}" stroke="${selected?.id === s.id ? "#ffffff" : "#b9dfed"}" stroke-width="${selected?.id === s.id ? 2 : 1}"/></svg>`})}
             eventHandlers={{click: () => setSelected(s)}}
           >
@@ -338,6 +375,7 @@ export function MapView({view, envelope, detected, shownSpill, shownArea, shownS
               <b>{s.name}</b><br />MMSI {s.mmsi}<br />
               {s.status}{s.confidence ? ` · ${showPct(s.confidence)}` : ""}
               {atRisk && <><br /><b>AT RISK</b> · entry ~{atRisk.estimated_entry_minutes} min</>}
+              {rerouted && <><br /><b>SIMULATED REROUTE READY</b></>}
             </Tooltip>
           </Marker>
         );
@@ -351,7 +389,7 @@ export function MapView({view, envelope, detected, shownSpill, shownArea, shownS
         {detected && <span><i style={{width: 18, height: 0, borderTop: `3px solid ${C.hindcast}`}} />Where the oil drifted from ({show(source?.hours_backward)} h)</span>}
         {detected && <span><i style={{width: 18, height: 0, borderTop: `2px dotted ${C.forecast}`}} />Where it will drift next (48 h)</span>}
         {detected && <span><i style={{width: 18, height: 0, borderTop: `1px dashed ${C.spill}`}} />Possible affected area</span>}
-        {detected && <span><i style={{width: 10, height: 10, borderRadius: "50%", border: `2px dashed ${C.atRisk}`, display: "inline-block"}} />Vessel at risk (forward projection)</span>}
+        {detected && <span><i style={{width: 10, height: 10, borderRadius: "50%", border: `2px solid ${C.atRisk}`, boxShadow: `0 0 5px ${C.atRisk}`, display: "inline-block"}} />At risk · simulated reroute ready</span>}
         {detected && <span><i style={{width: 18, height: 0, borderTop: `3px dashed ${C.detour}`}} />Suggested route</span>}
         <span><i style={{width: 18, height: 0, borderTop: `2px dashed ${C.forecast}`}} />Selected vessel's projected track</span>
         {candidateTracks.length > 0 && (
@@ -369,7 +407,6 @@ export function MapView({view, envelope, detected, shownSpill, shownArea, shownS
           </span>
         )}
       </div>}
-      {onToggleEnvelope && <button className={"legendbtn exposurebtn" + (showEnvelope ? " open" : "")} onClick={onToggleEnvelope} title="Potential exposure envelope" aria-label="Toggle potential exposure envelope" aria-pressed={showEnvelope}><Layers size={17}/></button>}
       {setShowEnvironment && (
         <button className={"legendbtn envbtn" + (showEnvironment ? " open" : "")}
                 onClick={() => setShowEnvironment((v: boolean) => !v)}

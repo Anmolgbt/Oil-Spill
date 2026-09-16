@@ -239,10 +239,11 @@ button { font: inherit; color: inherit; }
 .legendbtn:hover { border-color: var(--accent); color: var(--accent); }
 .legendbtn.open { background: var(--accent); border-color: var(--accent); color: #fff; }
 .legend {
-  position: absolute; z-index: 500; bottom: 52px; left: 12px;
+  position: absolute; z-index: 500; bottom: 12px; left: 56px;
   background: rgba(255, 255, 255, .95); border: 1px solid var(--line);
   border-radius: 8px; padding: 10px 12px; display: grid; gap: 6px; font-size: 12px;
   box-shadow: 0 2px 10px rgba(16, 20, 26, .08);
+  max-height: calc(100% - 24px); overflow-y: auto;
 }
 .legend b { font-size: 11px; letter-spacing: .1em; color: var(--ink-mute); }
 .legend span { display: flex; align-items: center; gap: 8px; color: var(--ink-soft); }
@@ -503,7 +504,7 @@ button { font: inherit; color: inherit; }
 .robustline.highly .robusttag { color: var(--danger); }
 .legendbtn.envbtn { bottom: 52px; }
 .legendbtn.heatbtn { bottom: 92px; }
-.legend { bottom: 92px; }
+.legend { bottom: 12px; }
 .driftrow .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 .rosette { width: 120px; height: 120px; display: block; margin: 0 auto; }
 .oilhead.rankcmp {
@@ -908,7 +909,6 @@ button { font: inherit; color: inherit; }
 .case-section { padding-top: 28px; }
 .case-workstation .map-caption { gap: 9px 14px; }
 .case-workstation .map-caption span { font-size: 8px; }}
-.legendbtn.exposurebtn { bottom: 132px; }
 .report-sar { display: block; width: 140px; height: 115px; object-fit: contain; background: #132d40; margin: 12px 0; border-radius: 3px; }
 .report-provenance, .report-evidence-notes p { font-size: 10px; color: #7d929f; line-height: 1.6; }
 .report-candidate-table td { white-space: normal; font-size: 10px; }
