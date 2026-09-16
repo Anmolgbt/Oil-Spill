@@ -39,7 +39,7 @@ def ais_predict(req: AisPredictRequest):
     except ValueError as exc:
         raise HTTPException(400, str(exc))
     except FileNotFoundError:
-        raise HTTPException(503, "Model or scaler not found in models_artifacts/.")
+        raise HTTPException(503, "Model or scaler not found in backend/artifacts/.")
     except ImportError as exc:
         raise HTTPException(503, f"Inference dependencies unavailable: {exc}")
     except Exception as exc:

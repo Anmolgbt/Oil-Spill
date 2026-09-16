@@ -12,10 +12,10 @@
   --ink-mute: #6b7684;
   --accent: #0b5cab;
   --accent-soft: #e8f1fb;
-  --danger: #c0261b;
+  --danger: #7f1d1d;
   --danger-soft: #fdecea;
-  --warn: #9a5b00;
-  --warn-soft: #fdf3e3;
+  --warn: #7f1d1d;
+  --warn-soft: #fdf0f0;
   --ok: #1c6b3a;
   --ok-soft: #e9f6ee;
 }
@@ -87,6 +87,87 @@ button { font: inherit; color: inherit; }
 .alertbar span { color: var(--ink-soft); }
 .alertbar.ok { border-color: #c3e6d0; background: var(--ok-soft); color: var(--ok); }
 
+/* ---------- investigation bar ---------- */
+
+.investbar {
+  margin: 12px 24px 0; padding: 13px 16px; border-radius: 10px;
+  background: var(--panel); border: 1px solid var(--line);
+}
+.investhead {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap;
+}
+.investnow { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.investnow b { font-size: 17px; font-weight: 800; letter-spacing: .02em; }
+.investnow small { color: var(--ink-mute); font-size: 12px; }
+
+.startbtn {
+  display: flex; align-items: center; gap: 6px;
+  border: 1px solid var(--accent); background: var(--accent); color: #fff;
+  border-radius: 7px; padding: 9px 15px;
+  font-size: 13px; font-weight: 700; letter-spacing: .03em; cursor: pointer;
+}
+.startbtn:hover:not(:disabled) { filter: brightness(1.08); }
+.startbtn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Step rail. `done` is what has been established, `at` is the claim on screen
+   right now, `todo` has not been asserted yet and must not look as if it has. */
+.investsteps {
+  list-style: none; margin: 12px 0 0; padding: 0;
+  display: flex; flex-wrap: wrap; gap: 6px 18px;
+}
+.investsteps li {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 11px; font-weight: 700; letter-spacing: .06em;
+  color: var(--ink-mute);
+}
+.investsteps li i {
+  width: 9px; height: 9px; border-radius: 50%;
+  border: 2px solid var(--line); background: var(--panel);
+}
+.investsteps li.done { color: var(--ok); }
+.investsteps li.done i { background: var(--ok); border-color: var(--ok); }
+.investsteps li.at { color: var(--accent); }
+.investsteps li.at i {
+  background: var(--accent); border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.investnote {
+  margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--line-soft);
+  font-size: 13px; line-height: 1.55;
+}
+.investnote p { margin: 0; color: var(--ink-soft); }
+.investnote p + p { margin-top: 3px; }
+.investnote b { color: var(--ink); font-weight: 700; }
+/* The limit carries the same weight as the claim — never smaller, never greyer. */
+.investnote .limit b { color: var(--warn); }
+
+/* Shown where a finding will appear once its stage has been run. */
+.pending {
+  margin-top: 8px; padding: 10px 12px; border-radius: 8px;
+  background: var(--bg); border: 1px dashed var(--line);
+  color: var(--ink-mute); font-size: 12.5px; line-height: 1.5;
+}
+
+/* ---------- scan in progress ---------- */
+
+.scanning {
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: 18px;
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 15px; border-radius: 999px;
+  background: rgba(16, 20, 26, .88); color: #fff;
+  font-size: 13px; font-weight: 600; z-index: 500;
+  pointer-events: none;
+}
+.spinner {
+  width: 13px; height: 13px; border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, .35); border-top-color: #fff;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
+
 /* ---------- cards ---------- */
 
 .card {
@@ -154,23 +235,14 @@ button { font: inherit; color: inherit; }
 
 .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
 
-/* ---------- forecast rows ---------- */
-
-.barrow {
-  display: flex; align-items: baseline; justify-content: space-between;
-  gap: 12px; padding: 9px 0; border-top: 1px solid var(--line-soft);
-  font-size: 14px;
-}
-.barrow:first-of-type { border-top: 0; }
-.barrow span { color: var(--ink-soft); font-weight: 600; }
-.barrow b { font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
-
 /* ---------- map ---------- */
 
 .mapwrap {
   min-width: 0; display: flex; flex-direction: column;
   background: var(--panel); border: 1px solid var(--line);
   border-radius: 10px; overflow: hidden;
+  /* anchors the .scanning overlay */
+  position: relative;
 }
 .maphead {
   padding: 13px 16px; display: flex; justify-content: space-between;
@@ -179,6 +251,15 @@ button { font: inherit; color: inherit; }
 .maphead h1 { font-size: 15px; margin: 3px 0 0; font-weight: 700; }
 .maptools { display: flex; gap: 6px; flex: none; }
 .map { flex: 1; min-height: 360px; background: #dfe7ee; }
+/* Thermal mode's dark map — a filter on the same keyless OSM tiles already
+   used everywhere else, not a second tile provider. (CARTO's dark basemap
+   started requiring a paid API key in Aug 2026 and stamps unauthenticated
+   requests with a watermark — this sidesteps that entirely, and any future
+   equivalent from any other provider.) Only the tile pane is inverted, not
+   markers/overlays, which sit in separate Leaflet panes. */
+.map.thermal-dark .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.82) contrast(0.95) saturate(0.7);
+}
 
 /* Legend is collapsed behind the "i" button so it does not cover the map. */
 .legendbtn {
@@ -249,21 +330,12 @@ button { font: inherit; color: inherit; }
 
 .vname { font-size: 20px; font-weight: 800; margin: 2px 0 2px; }
 
-/* ---------- footer ---------- */
+/* ---------- print / report button ---------- */
 
-footer {
-  margin: 0 24px 16px; padding: 11px 16px; border-radius: 10px;
-  border: 1px solid var(--line); background: var(--panel);
-  display: flex; align-items: center; justify-content: space-between; gap: 16px;
-}
-.footer-actions { display: flex; gap: 8px; }
-.footer-actions button, .print {
-  border: 1px solid var(--line); background: var(--panel); border-radius: 7px;
-  padding: 9px 14px; font-size: 13px; font-weight: 600;
+.print {
+  border: 1px solid var(--accent); background: var(--accent); color: #fff;
+  border-radius: 7px; padding: 9px 14px; font-size: 13px; font-weight: 600;
   display: flex; align-items: center; gap: 7px; cursor: pointer;
-}
-.footer-actions .reportbtn, .print {
-  background: var(--accent); border-color: var(--accent); color: #fff;
 }
 
 /* ---------- report modal ---------- */
@@ -284,6 +356,10 @@ footer {
 .reporthead {
   display: flex; justify-content: space-between; align-items: flex-start;
   border-bottom: 1px solid var(--line); padding-bottom: 14px;
+  /* .close is position:absolute at right:14px/top:14px over the same box
+     this sits in — without this, the right-aligned badge below renders
+     underneath the close (X) button instead of beside it. */
+  padding-right: 40px;
 }
 .reporthead b { font-size: 20px; letter-spacing: .06em; }
 .reporthead small { display: block; color: var(--ink-mute); font-size: 11px; margin-top: 3px; }
@@ -303,6 +379,19 @@ footer {
   letter-spacing: .07em; text-transform: uppercase;
 }
 .reportgrid b { display: block; margin-top: 4px; font-size: 16px; }
+/* Shown when a pass holds more than one detection, so the reader knows which
+   one this report covers. */
+.reportscope {
+  margin: 0 0 12px; padding: 9px 12px; border-radius: 8px;
+  background: var(--bg); border: 1px solid var(--line-soft);
+  color: var(--ink-soft); font-size: 13px; line-height: 1.5;
+}
+
+/* A detection with no vessel in range is a result, not a missing value. */
+.reportempty {
+  margin: 8px 0 0; color: var(--ink-mute); font-size: 13px; line-height: 1.5;
+}
+
 .reportcandidate {
   display: grid; grid-template-columns: 1fr auto; gap: 3px;
   border-top: 1px solid var(--line-soft); padding: 11px 0;
@@ -375,3 +464,912 @@ footer {
   .oilrank { grid-template-columns: 40px 1fr 90px; gap: 8px; }
   .oilrank .meta, .oilrank .sus { grid-column: 2 / 4; }
 }
+
+/* ---------- why this vessel: the suspect score, taken apart ---------- */
+
+.candwrap { border-bottom: 1px solid var(--line-soft); }
+.candwrap:last-of-type { border-bottom: 0; }
+.candwrap .oilrank { border-bottom: 0; }
+/* Selection here means "under examination", not "guilty" — so the row uses the
+   neutral accent tint rather than the red used for confirmed spills. */
+.candwrap .oilrank.selected { background: var(--accent-soft); }
+.candwrap .oilrank:hover { background: var(--bg); }
+.candwrap .oilrank.selected:hover { background: var(--accent-soft); }
+/* Suspect scores are not verdicts. Danger-red across every candidate — the
+   lowest-ranked included — reads as guilt and contradicts the disclaimer
+   directly beneath the table, so this column stays neutral. Only the
+   top-ranked vessel is tinted, and only enough to find it. */
+.candwrap .oilrank .pct { color: var(--ink); }
+
+.whybox {
+  margin: 0 8px 12px; padding: 13px 15px;
+  border: 1px solid var(--line); border-radius: 9px; background: var(--panel);
+}
+.whyhead {
+  font-size: 13px; font-weight: 700; color: var(--ink);
+  margin-bottom: 11px;
+}
+
+.scorebars {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
+}
+@media (max-width: 860px) { .scorebars { grid-template-columns: 1fr; } }
+
+.scorebar-head {
+  display: flex; align-items: baseline; gap: 7px;
+  font-size: 11px; letter-spacing: .07em; color: var(--ink-mute);
+}
+.scorebar-head b { font-weight: 700; color: var(--ink-soft); }
+.scorebar-head .weight { font-variant-numeric: tabular-nums; }
+.scorebar-head strong {
+  margin-left: auto; font-size: 15px; font-weight: 800; color: var(--ink);
+  font-variant-numeric: tabular-nums; letter-spacing: 0;
+}
+.scoretrack {
+  margin: 6px 0 5px; height: 7px; border-radius: 4px;
+  background: var(--line-soft); overflow: hidden;
+}
+.scoretrack i {
+  display: block; height: 100%; border-radius: 4px;
+  background: var(--accent); transition: width .25s ease;
+}
+@media (prefers-reduced-motion: reduce) { .scoretrack i { transition: none; } }
+.scorebar small { font-size: 11.5px; color: var(--ink-mute); line-height: 1.45; }
+/* A term with no verdict must not read as a term that scored zero. */
+.scorebar.missing .scoretrack { background: repeating-linear-gradient(
+  45deg, var(--line-soft), var(--line-soft) 4px, var(--panel) 4px, var(--panel) 8px); }
+.scorebar.missing .scorebar-head strong { color: var(--ink-mute); font-size: 13px; }
+.scorebar.missing small { color: var(--warn); }
+
+.whytotal {
+  margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line-soft);
+  display: flex; align-items: baseline; justify-content: space-between; gap: 14px;
+  font-size: 12.5px; color: var(--ink-soft); font-variant-numeric: tabular-nums;
+  flex-wrap: wrap;
+}
+.whytotal b { font-size: 17px; font-weight: 800; color: var(--ink); }
+.whynote {
+  margin-top: 9px; font-size: 12px; line-height: 1.55; color: var(--ink-mute);
+}
+.whynote b { color: var(--warn); font-weight: 700; }
+
+/* ---------- counterfactual: what if this vessel caused it ---------- */
+
+.whatifbtn {
+  margin-top: 12px; width: 100%;
+  border: 1px solid var(--accent); background: var(--panel); color: var(--accent);
+  border-radius: 7px; padding: 9px 14px;
+  font-size: 12.5px; font-weight: 700; letter-spacing: .04em; cursor: pointer;
+}
+.whatifbtn:hover:not(:disabled) { background: var(--accent-soft); }
+.whatifbtn:disabled { opacity: .55; cursor: progress; }
+.whatifbtn.ghost {
+  margin-top: 10px; width: auto; padding: 6px 12px;
+  border-color: var(--line); color: var(--ink-mute); font-weight: 600;
+  letter-spacing: 0;
+}
+
+.whatifbox {
+  margin-top: 12px; padding: 12px 14px; border-radius: 9px;
+  border: 1px solid var(--line); background: var(--bg);
+}
+/* Consistency is amber, not red: it is corroboration, never a verdict. An
+   exculpatory result is green because ruling a vessel out is a good outcome —
+   the colours must not make "not consistent" read as a failure of the test. */
+.whatifbox.match   { border-color: #f0dcb4; background: var(--warn-soft); }
+.whatifbox.nomatch { border-color: #c3e6d0; background: var(--ok-soft); }
+.whatifbox.none { color: var(--ink-mute); font-size: 12.5px; }
+.whatifhead {
+  display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
+  font-size: 12px; letter-spacing: .05em; margin-bottom: 4px;
+}
+.whatifsay {
+  margin: 9px 0 0; font-size: 12.5px; line-height: 1.55; color: var(--ink-soft);
+}
+
+/* ---------- optimize route ---------- */
+
+.rerouteact {
+  margin-top: 10px; padding: 12px 14px; border-radius: 9px;
+  border: 1px solid var(--line); background: var(--bg);
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--ink-soft);
+}
+.optimisebtn {
+  display: flex; align-items: center; gap: 6px; white-space: nowrap;
+  border: 1px solid var(--ok); background: var(--ok); color: #fff;
+  border-radius: 7px; padding: 9px 15px;
+  font-size: 12.5px; font-weight: 700; letter-spacing: .04em; cursor: pointer;
+}
+.optimisebtn:hover { filter: brightness(1.08); }
+
+.rerouteout { width: 100%; }
+.rerouteouthead {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  font-size: 12px; letter-spacing: .05em; margin-bottom: 4px;
+}
+.undobtn {
+  margin-left: auto; border: 1px solid var(--line); background: var(--panel);
+  color: var(--ink-mute); border-radius: 6px; padding: 5px 11px;
+  font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.undobtn:hover { color: var(--ink); }
+
+/* The at-risk row before anyone has acted on it. */
+.oilrank .await { color: var(--ink-mute); font-style: normal; font-size: 12.5px; }
+
+/* ---------- replay ---------- */
+
+.replay {
+  padding: 11px 16px 14px; border-top: 1px solid var(--line);
+  background: var(--panel);
+}
+.replayhead {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-bottom: 9px;
+}
+.playbtn {
+  display: flex; align-items: center; gap: 6px;
+  border: 1px solid var(--accent); background: var(--accent); color: #fff;
+  border-radius: 7px; padding: 7px 13px;
+  font-size: 12px; font-weight: 700; letter-spacing: .04em; cursor: pointer;
+}
+.playbtn:hover { filter: brightness(1.08); }
+.replayclock {
+  margin-left: auto; font-size: 13px; font-weight: 700;
+  font-variant-numeric: tabular-nums; color: var(--ink);
+}
+
+.scrub {
+  width: 100%; margin: 0; accent-color: var(--accent); cursor: pointer;
+}
+.scrub:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+/* Pass markers under the scrubber. */
+.replayticks {
+  position: relative; height: 15px; margin-top: 1px;
+  font-size: 10px; font-weight: 700; letter-spacing: .07em; color: var(--ink-mute);
+}
+.replayticks span {
+  position: absolute; transform: translateX(-50%); white-space: nowrap;
+}
+
+/* The observed/projected distinction, stated in words and in colour. It is the
+   most important thing on screen during playback, so it gets its own band
+   rather than being left to the map alone. */
+.replaystate {
+  margin-top: 8px; padding: 9px 12px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--bg);
+  font-size: 12.5px; line-height: 1.5;
+}
+.replaystate b {
+  display: block; font-size: 11px; letter-spacing: .07em; margin-bottom: 2px;
+}
+.replaystate span { color: var(--ink-soft); }
+.replaystate.before    { border-color: #c4dcf5; background: var(--accent-soft); }
+.replaystate.before b  { color: var(--accent); }
+.replaystate.estimated { border-color: #f0dcb4; background: var(--warn-soft); }
+.replaystate.estimated b { color: var(--warn); }
+.replaystate.observed  { border-color: #f4c7c2; background: var(--danger-soft); }
+.replaystate.observed b { color: var(--danger); }
+.replaystate.projected { border-color: #c4dcf5; background: var(--accent-soft); }
+.replaystate.projected b { color: var(--accent); }
+.replayrange { font-size: 11.5px; margin: -3px 0 8px; }
+
+/* ---------- report: stages, notes ---------- */
+
+/* Each stage's finding sits directly above its limit, at the same weight. In a
+   document read after the fact, a caveat parked in a footer is a caveat nobody
+   reads. */
+.reportstages { list-style: none; margin: 6px 0 0; padding: 0; }
+.reportstages li {
+  padding: 8px 0 8px 13px; border-left: 2px solid var(--line);
+  margin-bottom: 2px;
+}
+.reportstages li b {
+  display: block; font-size: 11px; letter-spacing: .07em; color: var(--ink-mute);
+}
+.reportstages li span {
+  display: block; font-size: 13px; color: var(--ink); line-height: 1.5; margin-top: 2px;
+}
+.reportstages li em {
+  display: block; font-size: 12.5px; color: var(--warn);
+  font-style: normal; line-height: 1.5; margin-top: 2px;
+}
+
+.reportnote {
+  font-size: 12.5px; color: var(--ink-mute); line-height: 1.55; margin: 6px 0 8px;
+}
+.reportbox h3 {
+  font-size: 13px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--ink-mute); margin: 18px 0 6px;
+  padding-top: 12px; border-top: 1px solid var(--line-soft);
+}
+.reportcandidate span { white-space: pre-line; }
+
+/* Available to a screen reader, absent from the visual layout. */
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; margin: -1px;
+  padding: 0; overflow: hidden; white-space: nowrap;
+  clip: rect(0 0 0 0); clip-path: inset(50%); border: 0;
+}
+
+/* ---------- flow popup, and the pipeline rail ---------- */
+
+.flowbox { max-width: 720px; }
+.flowintro { font-size: 13.5px; line-height: 1.6; color: var(--ink-soft); margin: 10px 0 4px; }
+
+.flowstages { list-style: none; margin: 12px 0 0; padding: 0; }
+.flowstages li {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 11px 0; border-top: 1px solid var(--line-soft);
+}
+.flownum {
+  flex: 0 0 24px; height: 24px; border-radius: 50%;
+  background: var(--accent-soft); color: var(--accent);
+  display: grid; place-items: center;
+  font-size: 12px; font-weight: 800;
+}
+.flowstages li:first-child .flownum { background: var(--danger-soft); color: var(--danger); }
+.flowstages li b {
+  display: block; font-size: 11px; letter-spacing: .07em; color: var(--ink-mute);
+}
+.flowstages li span {
+  display: block; font-size: 13.5px; color: var(--ink); line-height: 1.5; margin-top: 2px;
+}
+.flowstages li em {
+  display: block; font-size: 12.5px; color: var(--warn);
+  font-style: normal; line-height: 1.5; margin-top: 3px;
+}
+
+/* The rail now records what ran, not how far someone clicked. Stage 1 is the
+   only measurement, so it is the only one that reads as one. */
+.investsteps.ran li.measured { color: var(--danger); }
+.investsteps.ran li.measured i { background: var(--danger); border-color: var(--danger); }
+.investsteps.ran li.inferred { color: var(--warn); }
+.investsteps.ran li.inferred i { background: var(--warn-soft); border-color: var(--warn); }
+
+.linkish {
+  border: 0; background: none; padding: 0; cursor: pointer;
+  color: var(--accent); font-weight: 600; text-decoration: underline;
+  font-size: inherit;
+}
+
+/* ---------- pass uploader ---------- */
+
+.uploader { margin-bottom: 12px; }
+
+/* The left column is 320px, so this stacks rather than trying to sit in a row. */
+.dropzone {
+  display: block; padding: 10px 12px; border-radius: 9px;
+  border: 1px dashed var(--line); background: var(--bg);
+  color: var(--ink-soft); transition: border-color .15s, background .15s;
+}
+.dropzone > svg { display: none; }
+.dropzone.over { border-color: var(--accent); background: var(--accent-soft); }
+.dropzone.sending { opacity: .6; }
+.dropzone > div:first-of-type { min-width: 0; margin-bottom: 8px; }
+.dropzone b { display: flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 700; color: var(--ink); }
+.dropzone small { display: block; font-size: 11px; color: var(--ink-mute); }
+
+.dropactions { display: flex; gap: 5px; }
+.dropactions button { flex: 1; justify-content: center; }
+.dropactions button {
+  display: flex; align-items: center; gap: 4px;
+  border: 1px solid var(--line); background: var(--panel); border-radius: 6px;
+  padding: 5px 9px; font-size: 11.5px; font-weight: 600; cursor: pointer;
+}
+.dropactions button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.dropactions button:disabled { opacity: .5; cursor: not-allowed; }
+
+.uploadstatus {
+  margin-top: 7px; font-size: 12px; color: var(--ink-soft);
+}
+.uploadresult {
+  margin-top: 8px; padding: 9px 11px; border-radius: 8px;
+  border: 1px solid #c3e6d0; background: var(--ok-soft);
+  font-size: 12px; line-height: 1.5;
+}
+.uploadresult b { display: block; color: var(--ok); font-size: 12px; margin-bottom: 3px; }
+.uploadresult ul { margin: 0 0 4px; padding-left: 15px; color: var(--ink-soft); }
+.uploadresult small { display: block; color: var(--ink-mute); margin-top: 3px; }
+.uploadresult small.warn { color: var(--warn); }
+
+.uploadedlist {
+  margin-top: 7px; display: flex; flex-wrap: wrap; gap: 5px;
+}
+.uploadedlist span {
+  display: flex; align-items: center; gap: 4px;
+  border: 1px solid var(--line); border-radius: 5px; padding: 3px 4px 3px 8px;
+  font-size: 11px; font-weight: 700; color: var(--ink-soft);
+}
+.uploadedlist button {
+  border: 0; background: none; padding: 2px; cursor: pointer;
+  color: var(--ink-mute); display: grid; place-items: center;
+}
+.uploadedlist button:hover { color: var(--danger); }
+
+/* Shown when a pass runs past the AIS the fleet actually holds. */
+.stalebar {
+  margin: 12px 24px 0; padding: 10px 14px; border-radius: 8px;
+  display: flex; align-items: center; gap: 10px; font-size: 13px;
+  border: 1px solid #f0dcb4; background: var(--warn-soft); color: var(--warn);
+}
+.stalebar span { color: var(--ink-soft); }
+.stalebar b { color: var(--warn); }
+
+/* ---------- traffic funnel ---------- */
+
+/* The irrelevant-traffic filter, shown as the chain it actually walks. Worth
+   its own row because the problem statement asks for this filtering by name,
+   and because a funnel that stops rejecting anyone should be visibly wrong. */
+.funnel {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin: 2px 0 6px; padding: 8px 10px; border-radius: 8px;
+  background: var(--bg); border: 1px solid var(--line-soft);
+  font-size: 12px; color: var(--ink-soft);
+}
+.funnel b { color: var(--ink); font-weight: 800; font-variant-numeric: tabular-nums; }
+.funnel i { color: var(--ink-mute); font-style: normal; }
+.funnel .kept b { color: var(--accent); }
+.funnel em {
+  margin-left: auto; font-style: normal; color: var(--warn); font-weight: 600;
+}
+.funnelbasis {
+  font-size: 11.5px; color: var(--ink-mute); line-height: 1.5; margin-bottom: 8px;
+}
+
+/* The single constructed thing in the demo, stated where the method is
+   explained rather than left in a data file nobody opens. */
+.copresence {
+  margin-top: 14px; padding: 11px 13px; border-radius: 9px;
+  border: 1px solid #f0dcb4; background: var(--warn-soft);
+  font-size: 13px; line-height: 1.55;
+}
+.copresence > b { display: block; color: var(--warn); margin-bottom: 3px; }
+.copresence span { color: var(--ink-soft); }
+.copresence span b { color: var(--ink); }
+
+/* Shown when a candidate was scored without one of its evidence terms. The
+   score is still on a 0-100 scale, but it was reached from fewer inputs, and
+   that must be visible rather than inferred from a hatched bar alone. */
+.partialnote {
+  margin-bottom: 10px; padding: 8px 11px; border-radius: 7px;
+  border: 1px solid #f0dcb4; background: var(--warn-soft);
+  font-size: 12px; line-height: 1.5; color: var(--ink-soft);
+}
+.partialnote b { color: var(--warn); }
+
+/* ---------- header buttons ---------- */
+
+/* Was written inline on the Report button; lifted here verbatim when the
+   MODEL INFO button next to it needed the same look. */
+.reportbtn {
+  border: 1px solid var(--line); background: var(--panel);
+  border-radius: 7px; padding: 7px 12px;
+  font-size: 13px; font-weight: 600; color: inherit;
+  display: flex; align-items: center; gap: 6px;
+  cursor: pointer; margin-left: 6px;
+}
+
+/* ---------- model info card ---------- */
+
+.modelbox { width: min(820px, 95vw); }
+.modelbox h3 {
+  font-size: 13px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--ink-mute); margin: 20px 0 6px;
+  padding-top: 12px; border-top: 1px solid var(--line-soft);
+}
+.modelbox code { font-size: 12px; color: var(--ink-soft); }
+
+/* The sentences the card exists to make unmissable — what each model does NOT
+   do. Deliberately heavier than the notes around them. */
+.modelstatement {
+  margin: 12px 0 4px; padding: 11px 13px; border-radius: 8px;
+  background: var(--bg); border-left: 3px solid var(--accent);
+  font-size: 13px; line-height: 1.6; color: var(--ink);
+}
+.modelstatement.warn { border-left-color: var(--warn); }
+
+.modellimits { margin: 8px 0 0; padding-left: 18px; }
+.modellimits li {
+  font-size: 12.5px; color: var(--ink-mute); line-height: 1.55; margin-bottom: 6px;
+}
+
+/* ---------- counterfactual robustness ---------- */
+
+/* One line under the counterfactual verdict: how far the drift assumption can
+   move before that verdict changes. Deliberately not a chart — the sweep is a
+   band chosen by hand, and plotting it would lend it a precision it has not
+   got. */
+.robustline {
+  display: flex; gap: 9px; align-items: baseline;
+  margin: 10px 0 2px; padding: 9px 11px; border-radius: 8px;
+  background: var(--bg); border: 1px solid var(--line-soft);
+  font-size: 12.5px; line-height: 1.55; color: var(--ink-mute);
+}
+.robusttag {
+  flex: none; font-size: 11px; font-weight: 800;
+  letter-spacing: .07em; text-transform: uppercase; color: var(--ink-soft);
+}
+/* Tone tracks how much the verdict leans on the assumption, NOT whether the
+   vessel looks guilty — a robust exculpatory result is as good a result as a
+   robust incriminating one. */
+.robustline.robust { border-left: 3px solid var(--ok); }
+.robustline.robust .robusttag { color: var(--ok); }
+.robustline.moderately { border-left: 3px solid var(--warn); }
+.robustline.moderately .robusttag { color: var(--warn); }
+.robustline.highly { border-left: 3px solid var(--danger); }
+.robustline.highly .robusttag { color: var(--danger); }
+
+/* ---------- drift assumption comparison ---------- */
+
+/* The environmental layer toggle, stacked above the legend button so the two
+   map controls read as one column rather than competing. */
+.legendbtn.envbtn { bottom: 52px; }
+.legendbtn.heatbtn { bottom: 92px; }
+.legend { bottom: 92px; }
+
+/* The result this panel exists for: the drift assumption changes who is ranked
+   first. Warn-toned, not danger — it is a known sensitivity, not a fault. */
+.rankflip {
+  display: flex; gap: 10px; align-items: flex-start;
+  margin: 10px 0 4px; padding: 11px 13px; border-radius: 8px;
+  background: var(--warn-soft, var(--bg)); border-left: 3px solid var(--warn);
+  font-size: 13px; line-height: 1.6; color: var(--ink);
+}
+.rankflip svg { flex: none; color: var(--warn); margin-top: 2px; }
+
+.ranksteady {
+  display: flex; gap: 10px; align-items: flex-start;
+  margin: 10px 0 4px; padding: 10px 12px; border-radius: 8px;
+  background: var(--bg); border-left: 3px solid var(--ok);
+  font-size: 12.5px; line-height: 1.55; color: var(--ink-soft);
+}
+.ranksteady svg { flex: none; color: var(--ok); margin-top: 1px; }
+
+.driftgrid {
+  display: grid; grid-template-columns: minmax(220px, 1.1fr) minmax(240px, 1.3fr) 190px;
+  gap: 18px; margin: 14px 0 6px; align-items: start;
+}
+.driftcol > small {
+  display: block; color: var(--ink-mute); font-size: 11px;
+  letter-spacing: .08em; text-transform: uppercase; margin-bottom: 8px;
+}
+.driftrow {
+  display: flex; align-items: baseline; gap: 8px;
+  font-size: 12.5px; color: var(--ink-mute); padding: 3px 0;
+}
+.driftrow b { margin-left: auto; color: var(--ink); font-size: 13px; }
+.driftrow .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.driftsep {
+  margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line-soft);
+  font-size: 12.5px; color: var(--ink-mute);
+}
+.driftsep b { color: var(--ink); font-size: 15px; }
+
+.rosettecol { justify-self: end; }
+.rosette { width: 120px; height: 120px; display: block; margin: 0 auto; }
+.vectorkey { list-style: none; margin: 6px 0 0; padding: 0; }
+.vectorkey li {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 11.5px; color: var(--ink-mute); padding: 2px 0;
+}
+.vectorkey i { width: 10px; height: 2.5px; border-radius: 2px; flex: none; }
+
+.oilhead.rankcmp, .rankrow {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.4fr) minmax(130px, 1fr) minmax(160px, 1fr) 130px;
+  gap: 14px; align-items: center;
+}
+.rankrow {
+  padding: 9px 8px; border-bottom: 1px solid var(--line-soft);
+  font-size: 12.5px; color: var(--ink-mute);
+}
+.rankrow .vessel b { color: var(--ink); font-size: 13px; }
+.rankrow em { font-style: normal; color: var(--ink-mute); }
+/* Direction only — a vessel moving up is not thereby more suspicious, and the
+   colours must not suggest it is. */
+.delta { text-align: right; font-weight: 600; color: var(--ink-mute); }
+.delta.up, .delta.down { color: var(--ink-soft); }
+
+.driftcause {
+  display: flex; gap: 9px; align-items: flex-start;
+  margin-top: 12px; padding: 10px 12px; border-radius: 8px;
+  background: var(--bg); border: 1px solid var(--line-soft);
+  font-size: 12.5px; line-height: 1.55; color: var(--ink-mute);
+}
+.driftcause svg { flex: none; margin-top: 2px; }
+
+@media (max-width: 900px) {
+  .driftgrid { grid-template-columns: 1fr; }
+  .rosettecol { justify-self: start; }
+}
+
+/* ---------- environment-aware counterfactual ---------- */
+
+/* The second run of the same test, under the other drift assumption. Neutral
+   toned on purpose: agreement between two unmeasured assumptions is not
+   corroboration, and colouring it as reassurance would say it was. */
+.modecompare {
+  display: flex; gap: 9px; align-items: baseline;
+  margin: 10px 0 2px; padding: 9px 11px; border-radius: 8px;
+  background: var(--bg); border: 1px solid var(--line-soft);
+  border-left: 3px solid var(--env-accent, #0f766e);
+  font-size: 12.5px; line-height: 1.55; color: var(--ink-mute);
+}
+.modetag {
+  flex: none; font-size: 11px; font-weight: 800;
+  letter-spacing: .07em; text-transform: uppercase; color: #0f766e;
+}
+
+/* ---------- evidence quality and the detection outcome ---------- */
+
+/* The top-level answer, above the ranking that would otherwise imply it. */
+.outcome {
+  margin: 10px 0 14px; padding: 12px 14px; border-radius: 9px;
+  background: var(--bg); border: 1px solid var(--line-soft); border-left-width: 4px;
+}
+.outcome.none      { border-left-color: var(--danger); background: var(--danger-soft, var(--bg)); }
+.outcome.unstable  { border-left-color: var(--warn);   background: var(--warn-soft); }
+.outcome.supported { border-left-color: var(--ok); }
+
+.outcomehead { display: flex; align-items: center; gap: 9px; }
+.outcomehead b { font-size: 13px; letter-spacing: .07em; }
+.outcome.none .outcomehead svg, .outcome.none .outcomehead b { color: var(--danger); }
+.outcome.unstable .outcomehead svg, .outcome.unstable .outcomehead b { color: var(--warn); }
+.outcome.supported .outcomehead svg, .outcome.supported .outcomehead b { color: var(--ok); }
+.outcomecount {
+  margin-left: auto; font-size: 11.5px; color: var(--ink-mute);
+  text-transform: none; letter-spacing: 0;
+}
+.outcomereasons { margin: 9px 0 0; padding-left: 18px; }
+.outcomereasons li {
+  font-size: 12.5px; line-height: 1.6; color: var(--ink); margin-bottom: 5px;
+}
+/* What the outcome does NOT claim. Never omitted, never abbreviated. */
+.outcomemeans {
+  margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--line-soft);
+  font-size: 12px; line-height: 1.55; color: var(--ink-mute);
+}
+
+.evidence {
+  margin: 12px 0 4px; padding: 11px 12px; border-radius: 8px;
+  background: var(--bg); border: 1px solid var(--line-soft);
+}
+.evidencehead {
+  font-size: 11px; font-weight: 800; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--ink-mute); margin-bottom: 8px;
+}
+.evidencehead small {
+  display: block; margin-top: 2px; font-weight: 500; font-size: 11px;
+  letter-spacing: 0; text-transform: none; color: var(--ink-mute);
+}
+.evidencerow {
+  display: grid; grid-template-columns: 96px 130px 1fr; gap: 10px;
+  align-items: baseline; padding: 5px 0; font-size: 12.5px; color: var(--ink-mute);
+}
+.evidencename { color: var(--ink); font-weight: 600; }
+.evidencewhy { line-height: 1.5; }
+
+.gradepill {
+  display: inline-block; text-align: center; padding: 2px 0; border-radius: 4px;
+  font-size: 10.5px; font-weight: 800; letter-spacing: .06em;
+}
+.gradepill.ghigh   { background: #e6f4ec; color: #14683a; }
+.gradepill.gmedium { background: var(--warn-soft); color: var(--warn); }
+.gradepill.glow    { background: #fdecea; color: var(--danger); }
+/* UNAVAILABLE is deliberately NOT the bottom of that ramp — grey, outside the
+   scale, because no evidence is not weak evidence. */
+.gradepill.gunavailable {
+  background: transparent; color: var(--ink-mute);
+  border: 1px dashed var(--line); padding: 1px 0;
+}
+
+.evidencemissing {
+  margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--line-soft);
+  font-size: 12px; line-height: 1.55; color: var(--ink-mute);
+}
+
+/* ---------- the plain-language reading ---------- */
+
+.narrative {
+  margin: 12px 0 4px; padding: 12px 13px; border-radius: 8px;
+  background: var(--panel); border: 1px solid var(--line);
+}
+.narrativehead {
+  font-size: 11px; font-weight: 800; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--ink-mute); margin-bottom: 8px;
+}
+.narrativebeats { list-style: none; margin: 0; padding: 0; }
+.beat {
+  display: flex; gap: 9px; align-items: flex-start;
+  padding: 6px 0; font-size: 13px; line-height: 1.6; color: var(--ink);
+}
+.beat svg { flex: none; margin-top: 3px; }
+.beat.supports svg { color: var(--ok); }
+.beat.weakens svg  { color: var(--warn); }
+.beat.neutral svg  { color: var(--ink-mute); }
+/* A missing beat is styled at full weight, not greyed away. Absent evidence
+   fading into the background is exactly how "UNAVAILABLE is not LOW" gets lost
+   between the grades and the prose. */
+.beat.missing svg  { color: var(--danger); }
+.beat.missing { color: var(--ink); }
+
+.narrativedisclaimer {
+  margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--line-soft);
+  font-size: 12px; line-height: 1.55; color: var(--ink-mute);
+}
+
+/* ---------- report: outcome, evidence, drift, limits ---------- */
+
+.reportoutcome {
+  margin: 10px 0 6px; padding: 12px 14px; border-radius: 8px;
+  background: var(--bg); border: 1px solid var(--line-soft); border-left-width: 4px;
+}
+.reportoutcome.no_strong_candidate         { border-left-color: var(--danger); }
+.reportoutcome.leading_candidate_unstable  { border-left-color: var(--warn); }
+.reportoutcome.candidate_supported         { border-left-color: var(--ok); }
+.reportoutcome b { font-size: 14px; }
+.reportoutcomecount { float: right; font-size: 11.5px; color: var(--ink-mute); }
+.reportoutcome ul { margin: 8px 0 0; padding-left: 18px; }
+.reportoutcome li { font-size: 12.5px; line-height: 1.6; margin-bottom: 4px; }
+.reportoutcome em {
+  display: block; margin-top: 8px; padding-top: 7px;
+  border-top: 1px solid var(--line-soft);
+  font-style: normal; font-size: 12px; color: var(--ink-mute); line-height: 1.55;
+}
+
+.reportevidence { padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
+.reportevidence > b { font-size: 13px; }
+.reportgrades { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 4px; }
+.reportgrades span {
+  font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase;
+  padding: 2px 7px; border-radius: 4px; background: var(--bg); color: var(--ink-mute);
+}
+.reportgrades .ghigh   { background: #e6f4ec; color: #14683a; }
+.reportgrades .gmedium { background: var(--warn-soft); color: var(--warn); }
+.reportgrades .glow    { background: #fdecea; color: var(--danger); }
+.reportgrades .gunavailable { border: 1px dashed var(--line); }
+
+.reportbeats { margin: 6px 0 0; padding-left: 16px; }
+.reportbeats li { font-size: 12.5px; line-height: 1.55; margin-bottom: 4px; color: var(--ink); }
+.reportbeats li.supports::marker { color: var(--ok); }
+.reportbeats li.weakens::marker  { color: var(--warn); }
+/* Missing evidence is marked, not muted — greying it out in print is the same
+   failure as leaving it out. */
+.reportbeats li.missing::marker  { color: var(--danger); }
+.reportmissing {
+  display: block; margin-top: 5px; font-style: normal;
+  font-size: 12px; color: var(--danger);
+}
+
+.reportforecast {
+  display: grid; grid-template-columns: 70px 1fr 1fr 90px; gap: 6px 12px;
+  margin: 10px 0; font-size: 12.5px; color: var(--ink);
+}
+.reportforecast small {
+  color: var(--ink-mute); font-size: 10.5px; letter-spacing: .07em;
+  text-transform: uppercase;
+}
+
+.reportsensitivity {
+  margin: 8px 0; padding: 10px 12px; border-radius: 8px;
+  font-size: 12.5px; line-height: 1.6; background: var(--bg);
+  border-left: 3px solid var(--line);
+}
+.reportsensitivity.changed { border-left-color: var(--warn); background: var(--warn-soft); }
+.reportsensitivity.steady  { border-left-color: var(--ok); }
+
+.reportlimits { margin: 8px 0 0; padding-left: 18px; }
+.reportlimits li {
+  font-size: 12.5px; line-height: 1.55; color: var(--ink-mute); margin-bottom: 5px;
+}
+
+/* ---------- guided walkthrough ---------- */
+
+/* Fixed, and deliberately not a modal: the presenter must stay able to click
+   the real interface and answer a question mid-step. A walkthrough that traps
+   whoever is giving the demo is worse than one they can step out of. */
+.demobar {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px;
+  z-index: 3000; width: min(860px, calc(100vw - 32px));
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 14px 44px rgba(16, 20, 26, .22);
+  padding: 13px 16px;
+}
+.demostep { display: flex; align-items: baseline; gap: 10px; }
+.democount {
+  font-size: 11px; font-weight: 800; letter-spacing: .08em;
+  color: #fff; background: var(--accent); border-radius: 5px; padding: 2px 7px;
+}
+.demostep b { font-size: 14px; }
+.demotext {
+  margin: 7px 0 10px; font-size: 13px; line-height: 1.6; color: var(--ink-soft);
+}
+.democtl { display: flex; gap: 8px; align-items: center; }
+.democtl button {
+  display: flex; align-items: center; gap: 5px;
+  border: 1px solid var(--line); background: var(--panel); color: inherit;
+  border-radius: 7px; padding: 6px 12px; font-size: 13px; font-weight: 600;
+  cursor: pointer;
+}
+.democtl button:disabled { opacity: .45; cursor: default; }
+.democtl .primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.democtl .ghost { margin-left: auto; color: var(--ink-mute); }
+
+/* The step's target — the REAL panel, outlined. Nothing is duplicated. */
+.demofocus {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 10px;
+  scroll-margin: 120px;
+}
+
+@media print { .demobar, .demofocus { display: revert; outline: 0; } .demobar { display: none; } }
+
+/* ---------- layout utilities lifted out of App.tsx ---------- */
+
+.app.fullmap { height: 100vh; display: flex; flex-direction: column; }
+.mapfill { flex: 1; min-height: 0; position: relative; }
+
+/* An eyebrow's right-hand detail: normal case, no tracking. */
+.eyebrowright { margin-left: auto; text-transform: none; letter-spacing: 0; }
+.eyebrow.flush { margin: 0; }
+.eyebrow.spaced { margin-top: 16px; }
+.timebar.spaced { margin-bottom: 10px; }
+
+.cardsub { margin-bottom: 6px; font-size: 12px; }
+.cardnote { margin-top: 10px; }
+.metrics.tight { margin-top: 4px; }
+.metrics.flush { margin-top: 0; }
+.metrics .span2 { grid-column: 1 / 3; }
+.metrics b.md { font-size: 14px; }
+.metrics b.lg { font-size: 17px; }
+
+/* Compact warning treatment. */
+.alertbar:not(.ok) { background: #7f1d1d; border-color: #7f1d1d; color: #fff; }
+.stalebar, .rankflip { color: #7f1d1d; }
+
+.government-actions { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line-soft); }
+.government-actions ol { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 24px; padding: 0; list-style: none; }
+.government-actions li b, .government-actions li span { display: block; }
+.government-actions li b { font-size: 13px; margin-bottom: 4px; }
+.government-actions li span { font-size: 12px; line-height: 1.5; color: var(--ink-soft); }
+.reportbox .government-actions ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 700px) { .government-actions ol { grid-template-columns: 1fr; } .incident { flex-wrap: wrap; } }
+
+.candidate-list-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; }
+.candidate-list-footer > span { color: var(--ink-mute); font-size: 12px; }
+
+/* Maritime investigation workstation */
+.workstation { --ink: #162d43; --ink-soft: #526779; --ink-mute: #738493; background: #f3f6f8; min-height: 100vh; }
+.workstation .topbar { min-height: 76px; padding: 16px 24px; gap: 24px; background: #fff; border-bottom: 1px solid #dce4e9; }
+.workstation .brand b { font-size: 20px; letter-spacing: .035em; }
+.workstation .brand small { font-size: 11px; letter-spacing: .04em; text-transform: none; margin-top: 3px; }
+.workstation .brandmark { background: #eaf1f6; border: 1px solid #d8e3ec; color: #174765; border-radius: 9px; width: 40px; height: 40px; }
+.incident-id { font-size: 12px; color: #748492; margin-left: auto; white-space: nowrap; }
+.workstation .incident { margin-left: 0; gap: 8px; }
+.workstation .reportbtn { font-size: 11px; font-weight: 600; padding: 9px 12px; border-radius: 6px; text-transform: none; letter-spacing: 0; }
+.workstation .openreport { background: #173e58; border-color: #173e58; color: white; }
+.workspace-toolbar { display: flex; align-items: center; gap: 18px; padding: 12px 24px; min-height: 48px; }
+.incident-status { display: inline-flex; align-items: center; gap: 7px; font-size: 10px; font-weight: 750; letter-spacing: .06em; }
+.incident-status.warning { color: #861d35; }
+.incident-status.clear { color: #2e7556; }
+.workspace-context { color: #70828e; font-size: 11px; margin-right: auto; }
+.text-button { border: 0; padding: 4px 0; color: #315a75; background: transparent; cursor: pointer; font-size: 11px; font-weight: 600; }
+.workstation .layout { display: grid; grid-template-columns: minmax(190px, 19fr) minmax(400px, 61fr) minmax(205px, 20fr); gap: 12px; padding: 0 20px; align-items: stretch; }
+.candidate-panel { background: #fff; border: 1px solid #dae3ea; border-radius: 9px; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+.panel-heading { display: flex; align-items: center; justify-content: space-between; padding: 17px 14px; border-bottom: 1px solid #edf1f4; }
+.panel-heading > span:last-child { color: #82909c; font-size: 11px; }
+.workstation .eyebrow { font-size: 10px; letter-spacing: .09em; margin-bottom: 0; gap: 7px; }
+.vessel-list { display: flex; flex-direction: column; }
+.vessel-card { width: 100%; display: flex; align-items: center; gap: 8px; padding: 16px 10px; background: white; border: 0; border-bottom: 1px solid #edf1f4; border-left: 3px solid transparent; text-align: left; cursor: pointer; color: var(--ink); min-width: 0; }
+.vessel-card:hover, .vessel-card.active { background: #f0f5f9; }
+.vessel-card.leader { border-left-color: #8b233a; background: #fcf6f7; }
+.vessel-rank { font-size: 11px; color: #8493a0; width: 10px; flex: none; }
+.vessel-icon { color: #7d9aac; display: grid; place-items: center; width: 30px; height: 40px; flex: none; }
+.vessel-card.leader .vessel-icon, .vessel-card.leader > strong { color: #8b233a; }
+.vessel-copy { display: block; flex: 1; min-width: 0; }
+.vessel-copy b { display: block; font-size: 11px; line-height: 1.3; overflow-wrap: anywhere; }
+.vessel-copy small { display: block; font-size: 10px; color: #8494a1; margin: 4px 0 8px; }
+.vessel-card > strong { font-size: 15px; align-self: flex-start; padding-top: 3px; }
+.mini-score { display: block; height: 3px; width: 100%; background: #e4ecf1; border-radius: 9px; overflow: hidden; }
+.mini-score i { display: block; height: 100%; background: #6895af; border-radius: inherit; }
+.leader .mini-score i { background: #8b233a; }
+.view-all { display: flex; align-items: center; justify-content: center; gap: 6px; background: #fff; border: 0; padding: 15px 8px; color: #28516a; font-size: 11px; cursor: pointer; }
+.selected-evidence { margin: 0 12px 10px; }
+.candidate-panel-footer { margin-top: auto; padding: 14px; border-top: 1px solid #edf1f4; }
+.candidate-panel-footer small { display: block; color: #8a98a3; font-size: 10px; line-height: 1.5; margin-top: 6px; }
+.workstation .mapwrap { border-color: #d7e1e8; border-radius: 9px; }
+.workstation .maphead { padding: 9px 12px; min-height: 42px; }
+.workstation .map { min-height: 460px; }
+.map-caption { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 20px; padding: 10px; background: white; }
+.map-caption span { display: inline-flex; align-items: center; gap: 6px; color: #708391; font-size: 9px; }
+.key-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; }
+.spill-key { background: #e05a31; }.source-key { background: #e9b749; }
+.key-line { width: 13px; border-top: 2px dashed #339dbd; }
+.intelligence { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.intel-card { background: #fff; border: 1px solid #dae3ea; border-radius: 9px; padding: 16px 14px; flex: 1; }
+.intel-card .eyebrow { display: flex; align-items: center; color: #6d8494; line-height: 1.4; }
+.intel-number { font-size: 30px; font-weight: 650; color: #183b51; margin-top: 13px; letter-spacing: -.035em; }
+.intel-card > small { color: #85949e; font-size: 10px; }
+.intel-pair { display: flex; justify-content: space-between; gap: 10px; margin-top: 13px; font-size: 10px; line-height: 1.5; }
+.intel-pair span { color: #80919d; }.intel-pair b { text-align: right; font-weight: 600; }
+.intel-caption { display: block; color: #85949e; font-size: 9px; margin-top: 13px; line-height: 1.4; }
+.intel-card h3 { font-size: 15px; margin: 16px 0 7px; }.source-position { font-size: 11px; color: #a27c21; }
+.top-intel { border-top: 3px solid #8b233a; }.top-intel .intel-number { color: #8b233a; font-size: 29px; margin-top: 9px; }.intel-number small { font-size: 12px; color: #8c9aa4; letter-spacing: 0; }
+.candidate-status { font-size: 9px; color: #8b233a; margin: 8px 0 14px; text-transform: uppercase; letter-spacing: .05em; }
+.primary-button { width: 100%; border: 1px solid #183e58; background: #183e58; color: white; border-radius: 5px; padding: 9px 12px; font-size: 11px; cursor: pointer; }
+.primary-button:disabled { opacity: .45; cursor: default; }
+.icon-button { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid #dbe4eb; background: #fff; color: #3a5c74; border-radius: 5px; cursor: pointer; flex: none; }
+.incident-timeline { margin: 12px 20px 0; display: flex; align-items: center; gap: 16px; background: #fff; border: 1px solid #dae3ea; border-radius: 7px; padding: 12px 16px; }
+.timeline-track { flex: 1; min-width: 0; }.timeline-labels { display: flex; justify-content: space-between; gap: 8px; font-size: 9px; color: #7a8b98; }.timeline-track input { width: 100%; height: 4px; accent-color: #315a74; margin: 9px 0 0; cursor: pointer; }.timeline-state { font-size: 10px; color: #738692; min-width: 110px; text-transform: capitalize; }
+.workstation > .government-actions { margin: 16px 20px 0; padding: 0; border: 0; }.government-actions .eyebrow { display: flex; align-items: center; gap: 8px; }.government-actions .eyebrowright { margin-left: auto; font-size: 9px; font-weight: 400; letter-spacing: 0; }
+.action-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 10px; }.action-grid article { display: flex; gap: 12px; padding: 15px; border: 1px solid #dce5eb; border-radius: 7px; background: white; }.action-grid svg { color: #537b92; flex: none; margin-top: 2px; }.action-grid b { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }.action-grid p { color: #7e909d; font-size: 10px; line-height: 1.6; margin: 6px 0 0; }
+.workstation-footer { display: flex; justify-content: space-between; gap: 20px; padding: 15px 22px; font-size: 9px; color: #8a98a3; line-height: 1.5; }
+.workstation-modal { width: min(700px, 94vw); padding: 24px; outline: none; border-radius: 12px; }.drawer-title { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-bottom: 22px; }.drawer-title h2 { font-size: 19px; margin: 0; }.workstation-modal .vessel-card { padding: 16px; }.workstation-modal .vessel-copy b { font-size: 13px; }.workstation-modal .oilstrip { margin: 0; padding: 0; border: 0; }
+.method-steps { padding: 0; list-style: none; }.method-steps li { display: flex; gap: 18px; padding: 12px 0; border-bottom: 1px solid #edf1f4; }.method-steps li > span { font-size: 12px; color: #86a1b3; }.method-steps b { display: block; font-size: 12px; text-transform: uppercase; }.method-steps small { display: block; color: #83949e; margin-top: 5px; font-size: 11px; }
+.evidence-heading { display: flex; justify-content: space-between; align-items: center; gap: 20px; }.evidence-heading h3 { margin: 0 0 6px; }.evidence-heading span { font-size: 11px; color: #8193a0; }.evidence-heading > strong { font-size: 28px; color: #882339; }.evidence-heading strong small { font-size: 12px; color: #8799a3; }
+.evidence-metrics { margin: 20px 0; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }.evidence-metrics > div { padding: 12px; border: 1px solid #e0e8ed; border-radius: 6px; }.evidence-metrics small { display: block; color: #7c929f; font-size: 10px; margin-bottom: 7px; }.evidence-metrics b { font-size: 12px; text-transform: capitalize; }.evidence-bars { display: grid; gap: 17px; margin: 25px 0; }.evidence-bars > div > div:first-child { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 8px; }.evidence-bars span { color: #7e929e; }
+.observation-select { display: flex; justify-content: space-between; align-items: center; font-size: 12px; margin-bottom: 16px; }.observation-select select { padding: 7px 10px; border: 1px solid #dbe4ea; border-radius: 5px; background: white; color: #25485f; }.fleet-row { display: flex; width: 100%; align-items: center; gap: 14px; background: white; border: 0; border-bottom: 1px solid #edf1f4; padding: 13px 0; text-align: left; font-size: 12px; cursor: pointer; }.fleet-row span { margin-left: auto; color: #8293a0; }.fleet-row small { color: #8293a0; }
+.model-summary section { border-bottom: 1px solid #e4ebf0; padding: 5px 0 16px; }.model-summary h3 { font-size: 11px; text-transform: uppercase; color: #8296a4; }.model-summary b { font-size: 14px; }.model-summary p { font-size: 12px; color: #7a8f9e; line-height: 1.7; }
+.report-brand { display: flex; justify-content: space-between; color: #244a62; }.report-brand span { color: #8b9aa5; font-size: 11px; }.reportbox .action-grid { grid-template-columns: 1fr 1fr; }.report-disclaimer { font-size: 10px; color: #8797a2; margin: 22px 0; }.compact-result { font-size: 12px; color: #872238; }
+@media (min-width: 1550px) { .workstation .map { min-height: 570px; }.vessel-card { padding-top: 21px; padding-bottom: 21px; }.vessel-copy b { font-size: 12px; } }
+@media (max-width: 1100px) { .workstation .layout { grid-template-columns: 185px minmax(300px, 1fr) 195px; padding: 0 12px; gap: 8px; }.workstation .topbar { padding: 14px; gap: 12px; }.incident-id { display: none; }.workstation .incident { margin-left: auto; }.vessel-icon { display: none; }.intel-card { padding: 13px 11px; }.workspace-context { display: none; }.workspace-toolbar { gap: 15px; }.workspace-toolbar .incident-status { margin-right: auto; } }
+@media (max-width: 800px) { .workstation .layout { grid-template-columns: 1fr; }.workstation .mapwrap { grid-row: 1; }.workstation .map { min-height: 440px; }.candidate-panel { grid-row: 2; }.intelligence { display: grid; grid-template-columns: repeat(3, 1fr); }.workstation .topbar { flex-wrap: wrap; }.workstation .incident { margin-left: 0; }.action-grid { grid-template-columns: 1fr 1fr; }.timeline-state { display: none; }.workspace-toolbar { flex-wrap: wrap; }.workstation-footer { flex-direction: column; gap: 5px; } }
+@media (max-width: 520px) { .intelligence, .action-grid { grid-template-columns: 1fr; }.workstation .reportbtn { font-size: 10px; padding: 8px; }.timeline-labels { font-size: 8px; }.incident-timeline { margin-left: 12px; margin-right: 12px; gap: 10px; }.evidence-metrics { grid-template-columns: 1fr; } }
+@media print { .workstation-modal.reportbox { width: 100%; max-height: none; border: 0; box-shadow: none; padding: 0; }.drawer-title { display: none; }.reportbox .action-grid { break-inside: avoid; } }
+.spill-map-label, .source-map-label { font-size: 9px; font-weight: 600; line-height: 1.5; padding: 7px 9px; border: 0; box-shadow: 0 2px 12px #102d4030; border-radius: 5px; }
+.spill-map-label { color: #a54425; }.source-map-label { color: #947119; }
+.workstation .leaflet-control-layers { font-family: inherit; font-size: 11px; border: 1px solid #d5e0e8; box-shadow: 0 2px 8px #122e4220; }
+
+/* Scrollable incident case file: overview first, evidence on the page. */
+.case-workstation { --ink: #183349; --ink-soft: #4f6677; --ink-mute: #6f8595; }
+.case-workstation .workspace-toolbar { padding-bottom: 5px; }
+.case-masthead { display: flex; justify-content: space-between; align-items: center; gap: 24px; margin: 16px 24px 20px; }
+.case-masthead h1 { font-size: 25px; letter-spacing: -.025em; margin: 7px 0 6px; font-weight: 650; }
+.case-masthead p { margin: 0; color: #748997; font-size: 12px; }
+.case-source-status { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.case-source-status small { font-size: 11px; color: #78909f; }
+.data-tag { display: inline-flex; align-items: center; align-self: flex-start; font-size: 10px; letter-spacing: .045em; font-weight: 600; color: #536e80; background: #edf2f5; border: 1px solid #dae5ec; border-radius: 3px; padding: 5px 7px; }
+.case-source-status .data-tag { align-self: flex-end; color: #8c5934; background: #fbf4ec; border-color: #eadac7; }
+.case-workstation .overview-layout { grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; padding: 0 24px; }
+.case-workstation .overview-layout .map { min-height: 485px; }
+.case-workstation .overview-layout .maphead { padding: 8px 12px; }
+.incident-brief { border: 1px solid #dae4eb; border-radius: 7px; background: white; padding: 22px 19px; display: flex; flex-direction: column; }
+.incident-brief h2 { font-size: 20px; margin: 17px 0 5px; font-weight: 650; }.incident-brief > p { color: #7a8e9c; font-size: 12px; margin: 0 0 20px; }
+.brief-facts { margin: 0; display: grid; gap: 0; }.brief-facts > div { display: flex; justify-content: space-between; gap: 12px; padding: 11px 0; border-bottom: 1px solid #edf1f4; font-size: 11px; }.brief-facts dt { color: #7a8e9d; }.brief-facts dd { margin: 0; font-weight: 600; text-align: right; }
+.brief-candidate { margin-top: auto; border-top: 2px solid #8d3142; padding-top: 15px; }.brief-candidate > div:nth-child(2) { display: flex; align-items: center; gap: 10px; justify-content: space-between; }.brief-candidate h3 { font-size: 14px; margin: 13px 0 7px; }.brief-candidate strong { color: #8e2a41; font-size: 23px; }.brief-candidate strong small { font-size: 10px; color: #8597a2; }.brief-candidate p { margin: 4px 0 12px; color: #966276; font-size: 11px; line-height: 1.5; }.brief-candidate .text-button { display: inline-flex; gap: 7px; align-items: center; }
+.pass-controls { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }.pass-controls > span { font-size: 9px; letter-spacing: .08em; color: #7f929e; margin-right: 5px; }.pass-controls button { display: flex; align-items: baseline; gap: 5px; padding: 6px 9px; border: 1px solid #dae4eb; background: white; border-radius: 4px; font-size: 11px; color: #577489; cursor: pointer; }.pass-controls button.active { color: white; background: #254f68; border-color: #254f68; }.pass-controls button small { font-size: 9px; opacity: .75; }.pass-controls button:disabled { opacity: .5; cursor: wait; }
+.case-workstation .incident-timeline { margin: 14px 24px 0; padding: 13px 16px; }.timeline-observations { display: flex; gap: 16px; align-items: center; margin: 10px 0 3px; }.timeline-observations button { border: 0; background: transparent; color: #456e86; font-weight: 700; font-size: 10px; cursor: pointer; padding: 0; }.timeline-observations small { font-weight: 400; color: #8499a7; margin-left: 4px; }.timeline-observations > span { margin-left: auto; color: #9b7c36; font-size: 10px; }
+.case-navigation { display: flex; gap: 5px; margin: 22px 24px 0; padding: 9px 0; border-bottom: 1px solid #d4e0e8; background: #f3f6f8ee; backdrop-filter: blur(5px); position: sticky; top: 0; z-index: 600; overflow-x: auto; }.case-navigation button { background: transparent; border: 0; border-right: 1px solid #d9e4eb; padding: 6px 16px; color: #5d788b; font-size: 11px; white-space: nowrap; cursor: pointer; }.case-navigation button:first-child { padding-left: 0; }.case-navigation button:last-child { border-right: 0; }.case-navigation button:hover { color: #183d58; }
+.incident-casefile { margin: 0 24px; }
+.case-section { padding: 35px 0 32px; border-bottom: 1px solid #d9e4eb; scroll-margin-top: 60px; }
+.case-section-heading { display: flex; align-items: center; gap: 15px; margin-bottom: 22px; }.case-index { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid #d2e0e9; background: #e9f0f5; font-size: 12px; color: #6b899e; border-radius: 4px; flex: none; }.case-section-heading small { color: #7d94a3; font-size: 11px; }.case-section-heading h2 { font-size: 22px; font-weight: 630; margin: 4px 0 0; letter-spacing: -.02em; }.case-heading-action { margin-left: auto; }.case-heading-action .text-button, .subsection-heading .text-button { display: inline-flex; align-items: center; gap: 6px; }.case-section-body { padding-left: 49px; }
+.case-section-body h3 { font-size: 15px; font-weight: 650; margin: 0 0 13px; }.case-section-body p { line-height: 1.65; }.section-intro { color: #6d8494; font-size: 13px; margin: 0 0 20px; max-width: 860px; }
+.observation-layout { display: grid; grid-template-columns: minmax(240px, .8fr) minmax(0, 1.7fr); gap: 28px; }.satellite-evidence { margin: 0; background: #142f42; border: 1px solid #203b4c; border-radius: 5px; overflow: hidden; align-self: start; }.satellite-evidence img { display: block; width: 100%; height: 290px; object-fit: contain; background: #0b1c28; }.satellite-evidence figcaption { display: flex; justify-content: space-between; gap: 12px; color: #a8becc; font-size: 10px; padding: 12px; }.image-unavailable { display: grid; place-content: center; justify-items: center; gap: 10px; height: 280px; color: #a6bdcd; font-size: 12px; }
+.classification-line { display: flex; align-items: center; gap: 12px; margin: 2px 0 22px; }.classification-symbol { display: grid; place-items: center; width: 40px; height: 40px; background: #f7ebea; color: #ae4e48; border-radius: 5px; }.classification-symbol.clear { color: #287058; background: #e9f4ef; }.classification-line small { font-size: 9px; letter-spacing: .08em; color: #8198a7; }.classification-line h3 { margin: 5px 0 0; font-size: 18px; }.classification-line > strong { margin-left: auto; font-size: 27px; color: #8a3445; }
+.case-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 17px 24px; }.case-fact { min-width: 0; }.case-fact small { display: block; font-size: 10px; color: #7a91a1; margin-bottom: 6px; }.case-fact b { font-size: 12px; line-height: 1.5; font-weight: 600; display: block; overflow-wrap: anywhere; }.analysis-note { padding: 15px 0 0; margin-top: 18px; border-top: 1px solid #dce6ed; }.analysis-note b { font-size: 12px; }.analysis-note p { margin: 7px 0 0; font-size: 12px; color: #6d8393; }.provenance-note { font-size: 11px; color: #8699a6; line-height: 1.65; margin: 14px 0 0; }
+.case-details { border-top: 1px solid #dce6ed; margin-top: 22px; padding: 14px 0 0; }.case-details summary { cursor: pointer; color: #375b73; font-size: 12px; font-weight: 600; padding: 2px 0; }.case-details[open] summary { margin-bottom: 18px; }.case-details p, .case-details li { color: #6d8494; font-size: 12px; line-height: 1.7; }.case-details li + li { margin-top: 8px; }
+.source-layout { display: grid; grid-template-columns: 1.65fr 1fr; gap: 35px; }.source-spread { margin: 0; border: 1px solid #dce6ed; border-radius: 5px; background: #fafcfd; padding: 8px; align-self: start; }.source-spread svg { display: block; width: 100%; max-height: 230px; }.source-spread figcaption { text-align: center; padding: 5px; font-size: 10px; color: #8a9ca8; }.release-chain { display: flex; align-items: center; gap: 12px; color: #927632; font-size: 11px; padding: 20px 0; }.release-chain svg { flex: none; }
+.environment-study { margin-top: 28px; padding-top: 25px; border-top: 1px solid #d8e4ec; }.subsection-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 0 18px; }.subsection-heading h3 { margin: 0; }.subsection-heading small { font-size: 10px; color: #8297a5; display: block; margin-bottom: 6px; }.environment-vectors { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 25px; padding: 12px 0 20px; }.environment-vector { display: flex; align-items: center; gap: 18px; border-right: 1px solid #dce7ee; }.environment-vector:last-child { border-right: 0; }.environment-vector svg { width: 96px; height: 96px; flex: none; }.environment-vector b { display: block; color: #738d9e; font-size: 11px; font-weight: 500; }.environment-vector strong { display: block; font-size: 22px; margin: 6px 0 4px; font-weight: 600; }.environment-vector small { color: #91a1ac; font-size: 11px; }
+.ais-search-strip { display: flex; flex-wrap: wrap; gap: 25px; margin-bottom: 24px; padding: 12px 0; border-bottom: 1px solid #dce7ee; }.ais-search-strip span { color: #8297a4; font-size: 11px; }.ais-search-strip b { color: #31546c; font-weight: 650; }.vessel-investigation-layout { display: grid; grid-template-columns: minmax(225px, .7fr) minmax(0, 1.65fr); gap: 28px; }.case-candidate-list { border: 1px solid #dbe5eb; border-radius: 5px; overflow: hidden; background: white; align-self: start; }.case-candidate-list > .eyebrow { padding: 13px; }.case-candidate-list .vessel-card { padding: 14px 10px; }.case-candidate-list .vessel-copy b { font-size: 12px; }.case-candidate-list .vessel-icon { display: grid; }.case-candidate-list .vessel-card > strong { font-size: 16px; }.vessel-record { padding: 6px 0; }.vessel-record .case-facts { gap: 18px 20px; }
+.ais-fix-table { overflow: auto; max-height: 290px; }.ais-fix-table table, .exposure-table table { width: 100%; border-collapse: collapse; text-align: left; font-size: 11px; }.ais-fix-table th, .exposure-table th { background: #eaf1f6; color: #698596; font-weight: 500; padding: 10px 12px; white-space: nowrap; }.ais-fix-table th { position: sticky; top: 0; }.ais-fix-table td, .exposure-table td { padding: 11px 12px; border-bottom: 1px solid #e0e9ef; color: #526e81; white-space: nowrap; }.exposure-table { overflow-x: auto; }
+.consistency-review { margin-top: 25px; padding: 20px; border: 1px solid #d9e5ec; border-left: 3px solid #879eae; background: #edf3f7; border-radius: 3px; }.consistency-review > div:first-child { display: flex; align-items: center; gap: 9px; color: #698498; }.consistency-review h3 { margin: 0; }.consistency-review p { font-size: 12px; color: #6f8798; margin: 12px 0 17px; max-width: 930px; }.consistency-review .case-facts { grid-template-columns: repeat(3,minmax(0,1fr)); }.consistency-review > small { display: block; color: #8a9da9; font-size: 10px; margin-top: 16px; }
+.attribution-context { display: flex; flex-wrap: wrap; gap: 30px; margin-bottom: 25px; }.attribution-context span { display: grid; gap: 6px; color: #8398a6; font-size: 10px; }.attribution-context b { color: #34586e; font-size: 12px; }.attribution-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 38px; }.attribution-layout > div:first-child { padding-right: 28px; border-right: 1px solid #dce6ed; }.attribution-layout .evidence-heading > strong { font-size: 32px; }.evidence-findings ul { margin: 0 0 20px; padding-left: 17px; }.evidence-findings li { padding-left: 3px; font-size: 12px; color: #627d90; line-height: 1.7; margin-bottom: 10px; }.evidence-findings ul li::marker { color: #5f948d; }.evidence-findings ul.weakens li::marker { color: #a76257; }.evidence-findings p { font-size: 12px; color: #8599a7; }.source-test { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 22px 0 16px; border-top: 1px solid #dce6ed; margin-top: 24px; }.source-test h3 { margin: 0 0 7px; }.source-test p { color: #7c92a1; font-size: 12px; margin: 0; }
+.forecast-sequence { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 0; border: 1px solid #d8e5ed; border-radius: 5px; overflow: hidden; background: white; }.forecast-sequence button { position: relative; border: 0; background: transparent; border-right: 1px solid #dce7ee; text-align: left; padding: 18px; cursor: pointer; color: #2d566f; }.forecast-sequence button:last-child { border: 0; }.forecast-sequence button:hover { background: #eaf3f8; }.forecast-sequence small { display: block; color: #7193a8; font-size: 10px; letter-spacing: .06em; }.forecast-sequence b { display: block; margin: 13px 0 4px; font-size: 21px; font-weight: 600; }.forecast-sequence span { display: block; font-size: 12px; color: #8199a8; }.forecast-sequence em { display: block; font-style: normal; font-size: 10px; color: #7190a4; margin-top: 14px; }.exposure-layout { display: grid; grid-template-columns: 1.4fr 1fr; gap: 35px; margin: 30px 0; }.exposure-layout .section-intro { margin-top: 20px; margin-bottom: 0; font-size: 12px; }.sensitive-area-status { padding-left: 28px; border-left: 1px solid #dce6ed; }.sensitive-area-status p { font-size: 13px; color: #6e899b; }.sensitive-area-status small { color: #8ca1af; font-size: 11px; line-height: 1.6; display: block; }
+.response-task { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }.response-task p { margin: 0; font-size: 13px; color: #536f83; }.case-section .government-actions { margin-top: 0; border-top: 0; padding-top: 0; }.case-section .government-actions > .eyebrow { display: none; }.case-section .action-grid { margin-top: 0; }.case-section .action-grid p { font-size: 12px; line-height: 1.6; }.case-section .action-grid b { font-size: 11px; }.report-handoff { display: flex; justify-content: space-between; align-items: center; gap: 25px; padding-top: 26px; margin-top: 25px; border-top: 1px solid #dce6ed; }.report-handoff h3 { margin-bottom: 6px; }.report-handoff p { color: #8a9ca8; font-size: 12px; margin: 0; }.report-handoff .primary-button { width: auto; min-width: 180px; }
+#operational-map { scroll-margin-top: 60px; }
+@media (max-width: 1100px) { .case-workstation .overview-layout { grid-template-columns: minmax(0, 1fr) 265px; }.case-section-body { padding-left: 0; }.environment-vector { gap: 6px; }.environment-vector svg { width: 78px; height: 78px; }.environment-vector strong { font-size: 18px; }.observation-layout { grid-template-columns: 1fr 1.5fr; }.classification-line h3 { font-size: 15px; }.classification-line > strong { font-size: 23px; }.attribution-layout { gap: 24px; } }
+@media (max-width: 800px) { .case-masthead { margin-left: 14px; margin-right: 14px; }.case-source-status { max-width: 240px; }.case-workstation .overview-layout { grid-template-columns: 1fr; padding: 0 14px; }.incident-brief { display: block; }.brief-facts { grid-template-columns: 1fr 1fr; gap: 0 25px; }.brief-candidate { margin-top: 20px; }.case-workstation .incident-timeline { margin-left: 14px; margin-right: 14px; }.case-navigation { margin-left: 14px; margin-right: 14px; }.incident-casefile { margin: 0 14px; }.observation-layout, .source-layout, .vessel-investigation-layout, .attribution-layout, .exposure-layout { grid-template-columns: 1fr; gap: 22px; }.satellite-evidence { max-width: 430px; width: 100%; }.source-spread { max-width: 450px; }.attribution-layout > div:first-child, .sensitive-area-status { border: 0; padding: 0; }.case-candidate-list { max-width: 480px; }.case-section-heading h2 { font-size: 20px; }.case-heading-action .data-tag { max-width: 180px; text-align: center; }.case-section .action-grid { grid-template-columns: 1fr 1fr; }.timeline-observations { gap: 9px; }.timeline-observations small { display: none; } }
+@media (max-width: 520px) { .case-masthead { flex-direction: column; align-items: flex-start; gap: 13px; }.case-source-status { align-items: flex-start; max-width: none; }.case-source-status .data-tag { align-self: flex-start; }.case-masthead h1 { font-size: 24px; }.pass-controls > span { display: none; }.pass-controls button { padding: 5px 6px; }.pass-controls button small { display: none; }.case-section-heading { flex-wrap: wrap; gap: 10px; }.case-heading-action { margin-left: 44px; }.case-section-heading h2 { font-size: 19px; }.case-facts { gap: 17px 14px; }.case-fact b { font-size: 11px; }.classification-line { flex-wrap: wrap; gap: 8px; }.classification-line > strong { margin-left: 48px; }.classification-symbol { width: 34px; height: 34px; }.classification-line h3 { font-size: 15px; }.environment-vectors { grid-template-columns: 1fr; gap: 12px; }.environment-vector { border-right: 0; border-bottom: 1px solid #dce7ee; padding-bottom: 12px; gap: 20px; }.environment-vector:last-child { border-bottom: 0; }.subsection-heading { flex-wrap: wrap; }.consistency-review .case-facts { grid-template-columns: 1fr; }.forecast-sequence { grid-template-columns: 1fr 1fr; }.forecast-sequence button { border-bottom: 1px solid #dce7ee; }.forecast-sequence b { font-size: 19px; }.case-section .action-grid { grid-template-columns: 1fr; }.report-handoff, .response-task, .source-test { flex-direction: column; align-items: flex-start; }.timeline-observations > span { font-size: 8px; }.case-navigation { gap: 0; }.case-navigation button { padding: 6px 12px; }.brief-facts { grid-template-columns: 1fr; }.case-section { padding-top: 28px; }.case-workstation .map-caption { gap: 9px 14px; }.case-workstation .map-caption span { font-size: 8px; } }
+.legendbtn.exposurebtn { bottom: 132px; }
+.report-sar { display: block; width: 140px; height: 115px; object-fit: contain; background: #132d40; margin: 12px 0; border-radius: 3px; }
+.report-provenance, .report-evidence-notes p { font-size: 10px; color: #7d929f; line-height: 1.6; }
+.report-candidate-table td { white-space: normal; font-size: 10px; }
+@media print { .report-candidate-table tr, .reportgrid > div, .report-evidence-notes { break-inside: avoid; }.reportbox h3 { break-after: avoid; }.report-sar { float: right; margin-left: 15px; }.reportbox .reportgrid { clear: none; }.reportbox .report-provenance { clear: both; } }
+/* Let wrapped controls contribute to header height on narrow screens. */
+.workstation .topbar { height: auto; }
+@media (max-width: 800px) { .workstation .topbar .incident { width: 100%; }.case-workstation .workspace-toolbar { padding-top: 13px; padding-bottom: 8px; } }
+@media (max-width: 520px) { .case-workstation .workspace-toolbar { display: grid; grid-template-columns: 1fr 1fr; align-items: start; gap: 10px; padding-left: 14px; padding-right: 14px; }.case-workstation .workspace-toolbar .incident-status { grid-column: 1 / -1; }.case-workstation .workspace-toolbar > .text-button { text-align: left; }.reportbox .reportgrid { grid-template-columns: 1fr; }.reportbox .action-grid { grid-template-columns: 1fr; }.reportbox .report-brand { flex-wrap: wrap; gap: 8px; } }

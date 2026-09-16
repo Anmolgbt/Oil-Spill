@@ -60,14 +60,17 @@ def _artifact(name):
 
 
 def model_artifacts():
-    """Trained files preserved in the repo. Present, but not loaded for inference."""
+    """The trained files shipped in the repo, and whether they back live inference."""
     return {
         "cnn": _artifact("oilspill_cnn.pth"),
         "ais_isolation_forest": _artifact("ais_isolation_forest.pkl"),
         "ais_scaler": _artifact("ais_scaler.pkl"),
-        "live_inference": False,
-        "note": ("Weights are preserved for future live inference. The dashboard "
-                 "currently serves the completed stored result."),
+        "live_inference": True,
+        "note": ("These weights are loaded and run for real by /fleet/scan, "
+                 "/ai/cnn/predict, /ai/ais/predict and /ai/investigate. This "
+                 "endpoint sits under /ai-result, which serves the stored case "
+                 "from the handoff notebook — that stored payload is a recorded "
+                 "result, but the artifacts described here are the live ones."),
     }
 
 

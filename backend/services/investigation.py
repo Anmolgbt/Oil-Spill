@@ -24,9 +24,9 @@ Scientific limits, unchanged from the static integration and enforced here:
 * The vessel ranking is an analytical association, not proof of causation.
 """
 import time
-from math import atan2, cos, radians, sin, sqrt
 
 from core.config import COMPUTED_PROVENANCE
+from .geo import KM_PER_DEG_NOTEBOOK, haversine_km
 
 # --- notebook constants ------------------------------------------------------
 
@@ -38,7 +38,41 @@ HINDCAST_HOURS = 24
 # cells 52/53 - candidate search
 SEARCH_TIME_BEFORE_HOURS = 2
 SEARCH_TIME_AFTER_HOURS = 2
+# The notebook's own radius, kept verbatim because /ai/investigate reproduces
+# that completed case. It is NOT the right radius for the fleet path — see
+# fleet_search_radius_km() below.
 MAX_DISTANCE_KM = 50
+
+
+def fleet_search_radius_km(age_hours):
+    """
+    How close a vessel must have come to the estimated source to be worth
+    considering, for the fleet scan.
+
+    The notebook's flat 50 km was chosen for a corpus search, and over this
+    demo's AIS patch — a bounding box of roughly 21 x 38 km — it admits every
+    vessel that exists. A filter that rejects nobody is not a filter, and the
+    problem statement asks specifically for irrelevant traffic to be removed.
+
+    Derived from the same physics as the rest of the pipeline rather than
+    picked: the drift envelope is how far oil could have reached from the
+    source in `age_hours`, so a vessel that never came within a few envelope
+    radii of the estimated source cannot plausibly be its origin. The multiple
+    absorbs the hindcast's own error, which is why it is greater than one.
+
+    This also fixes a scoring artefact. Proximity is `100 * (1 - d / radius)`,
+    so a 50 km denominator over a 21 km patch compressed every vessel into the
+    top of the range; a derived radius spreads the scores across it.
+    """
+    from .damage import impact_envelope
+    return round(SEARCH_RADIUS_ENVELOPE_MULTIPLE
+                 * impact_envelope(age_hours)["radius_km"], 2)
+
+
+# Three envelope radii. Two is barely wider than the envelope itself and would
+# reject vessels the hindcast's error could easily account for; four re-admits
+# most of the patch.
+SEARCH_RADIUS_ENVELOPE_MULTIPLE = 3
 
 # cell 54 - trajectory window and final weights
 TRAJECTORY_BEFORE_HOURS = 6
@@ -58,16 +92,16 @@ DEFAULT_SPILL_LAT = 28.57
 DEFAULT_SPILL_LON = -94.80
 DEFAULT_SOURCE_TIME = "2021-02-17 08:00:00"
 
-KM_PER_DEGREE_LAT = 111.0
+# The notebook's flat degree-length, kept for its hindcast/forecast arithmetic.
+KM_PER_DEGREE_LAT = KM_PER_DEG_NOTEBOOK
 
-
-def haversine_km(lat1, lon1, lat2, lon2):
-    """Notebook cells 52/53, verbatim."""
-    R = 6371.0
-    lat1, lon1, lat2, lon2 = map(radians, (lat1, lon1, lat2, lon2))
-    dlat, dlon = lat2 - lat1, lon2 - lon1
-    a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
-    return R * 2 * atan2(sqrt(a), sqrt(1 - a))
+# This module used to define a SECOND haversine — the notebook's, at R = 6371.0
+# with the atan2 form. It has been removed in favour of geo.haversine_km. The
+# atan2 and asin forms are mathematically identical, and the only real
+# difference was the radius: measured across the coordinates this pipeline
+# actually uses, the two agreed to within 0.2 m over 148 km (1.4 ppm), which is
+# four orders of magnitude below the 2-decimal kilometre precision anything is
+# reported at. Candidate distances and scores are unchanged.
 
 
 # --- step 2: hindcast (cell 41) ----------------------------------------------
