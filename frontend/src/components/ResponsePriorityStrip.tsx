@@ -6,7 +6,6 @@ import type {ResponsePriority, Ship, SpillEntry} from "../types";
 export interface ResponsePriorityStripProps {
   priorities: ResponsePriority[];
   spills: SpillEntry[];
-  fleet: Ship[];
   selected: Ship | null;
   onSelect: (shipId: string) => void;
 }
@@ -18,7 +17,7 @@ export interface ResponsePriorityStripProps {
  * load-bearing and says what the score excludes.
  */
 export function ResponsePriorityStrip({
-  priorities: _priorities, spills, fleet, selected, onSelect,
+  priorities: _priorities, spills, selected, onSelect,
 }: ResponsePriorityStripProps) {
   const scan = {response_priorities: _priorities, spills};
   return (
@@ -60,7 +59,7 @@ export function ResponsePriorityStrip({
               </button>
             );
           })}
-          <GovernmentActions />
+          <GovernmentActions urgency={(scan.spills || []).find((sp: SpillEntry) => sp.spill?.ship_id === scan.response_priorities[0]?.ship_id)?.response?.urgency} />
         </div>
   );
 }

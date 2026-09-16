@@ -43,7 +43,7 @@ export function ReportModal({scan, detected, onClose, entry, index, candidates, 
       <div><small>DRIFT ENVELOPE</small><b>{entry?.affected_area?.area_km2 != null ? `${fmt(entry.affected_area.area_km2, 1)} km²` : "Unavailable"}</b></div>
       <div><small>{demo ? "SCENARIO OBSERVATION TIME" : "OBSERVATION TIME"}</small><b>{scan.observed_at ? scan.observed_at.replace("T", " ").replace("Z", " UTC") : "Unavailable"}</b></div>
     </div>
-    <p className="report-provenance">{scan.provenance?.sar_input?.source ?? "Source not supplied"}. Tile acquisition time and a measured slick boundary are not supplied. Map position uses an AIS anchor.</p>
+    <p className="report-provenance">{scan.provenance?.sar_input?.source ?? "Source not supplied"}</p>
     {detected && <>
       <h3>Source</h3>
       <div className="reportgrid">
@@ -65,8 +65,7 @@ export function ReportModal({scan, detected, onClose, entry, index, candidates, 
       {reroute && <div className="reportcandidate"><b>Route · {reroute.ship.name}</b><strong>{fmt(reroute.detour.suggested_heading_deg, 0)}°</strong><span>{reroute.detour.already_inside_zone ? "Exit route" : reroute.detour.clears_spill_zone ? "Clears modelled zone" : "No clear route"} · {fmt(reroute.detour.detour_distance_km, 1)} km · simulated</span></div>}
       <h3>Potential exposure</h3>
       <div className="reportgrid"><div><small>WATERS TO MONITOR</small><b>{fmt(entry?.affected_area?.area_km2, 1)} km² · modelled envelope</b></div><div><small>OPERATIONAL EXPOSURE</small><b>{entry?.risk ? `${entry.risk.at_risk_count} vessels within ${entry.risk.forecast_horizon_hours} h` : "Not assessed"}</b></div><div><small>RESPONSE ORDER</small><b>{entry?.response_priority ?? "Not ranked"}</b></div><div><small>SENSITIVE AREAS / ECOLOGICAL DAMAGE</small><b>Not assessed</b></div></div>
-      <p className="report-provenance">No habitat, protected-area or shoreline-exposure dataset is supplied. The envelope and forecast are potential exposure, not measured ecological damage.</p>
-      <GovernmentActions/>
+      <GovernmentActions topCandidate={top?.name} urgency={entry?.response?.urgency}/>
     </>}
     <p className="report-disclaimer">Attribution score is an investigation aid, not a legal determination of responsibility.</p>
     <button className="print" onClick={() => window.print()}><FileText size={15}/> Print / Save PDF</button>

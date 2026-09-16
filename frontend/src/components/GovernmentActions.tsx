@@ -1,12 +1,29 @@
 import {Bell, Search, Shield, Waves} from "lucide-react";
-const actions = [
-  {title: "Investigate", icon: Search, text: "Verify candidate AIS, voyage, cargo and operational records."},
-  {title: "Alert", icon: Bell, text: "Notify nearby vessels and maritime authorities."},
-  {title: "Contain", icon: Waves, text: "Task response assets; monitor spill movement and affected waters."},
-  {title: "Enforce", icon: Shield, text: "Review reporting and routing compliance where evidence warrants."},
-];
-export function GovernmentActions() {
-  return <section className="government-actions"><div className="eyebrow">INCIDENT RESPONSE <span className="eyebrowright">Recommended actions</span></div>
+
+export interface GovernmentActionsProps {
+  /** Name of the leading candidate, if one exists — sharpens "Investigate". */
+  topCandidate?: string | null;
+  /** URGENT / ELEVATED / ROUTINE, from the response advisory. */
+  urgency?: string | null;
+}
+
+/**
+ * Recommended next steps for the authority handling the case. Framed as
+ * actions to take, not background — this is a checklist, not an essay.
+ */
+export function GovernmentActions({topCandidate, urgency}: GovernmentActionsProps = {}) {
+  const serious = urgency === "URGENT" || urgency === "ELEVATED";
+  const actions = [
+    {title: "Investigate", icon: Search, text: topCandidate
+      ? `Pull AIS, voyage and cargo records for ${topCandidate} and the next-ranked candidates.`
+      : "Pull AIS, voyage and cargo records for the ranked candidates."},
+    {title: "Alert", icon: Bell, text: "Notify the port authority, flag state and vessels operating nearby."},
+    {title: "Contain", icon: Waves, text: "Task containment and skimming assets to the modelled envelope."},
+    {title: "Enforce", icon: Shield, text: serious
+      ? "Detain the leading candidate pending inspection; refer for prosecution if evidence holds."
+      : "Hold reporting and routing records on file for review."},
+  ];
+  return <section className="government-actions"><div className="eyebrow">RECOMMENDED ACTIONS</div>
     <div className="action-grid">{actions.map(({title, icon: Icon, text}) => <article key={title}><Icon size={19} /><div><b>{title}</b><p>{text}</p></div></article>)}</div>
   </section>;
 }

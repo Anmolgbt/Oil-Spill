@@ -1,6 +1,5 @@
 import {Fragment} from "react";
 import {Polyline, Tooltip} from "react-leaflet";
-import {MAP_COLOURS as C} from "../mapColours";
 import type {Environment} from "../types";
 
 export interface EnvironmentLayerProps {

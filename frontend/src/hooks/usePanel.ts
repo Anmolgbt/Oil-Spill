@@ -1,5 +1,5 @@
 import {useCallback, useEffect, useState} from "react";
-export const PANELS = ["candidates", "evidence", "method", "models", "report", "data", "routing"] as const;
+export const PANELS = ["candidates", "method", "models", "report"] as const;
 export type Panel = typeof PANELS[number];
 const readPanel = (): Panel | null => PANELS.find((p) => location.hash === `#${p}`) ?? null;
 

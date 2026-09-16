@@ -1,15 +1,15 @@
 import {useEffect, useMemo, useState, useRef} from "react";
-import {AlertTriangle, Anchor, Check, ChevronRight, ExternalLink, FileText} from "lucide-react";
-import {fleetViewport, getInvestigation, getFleetMetadata, runCounterfactual, runFleetScan} from "./lib/oiltrace";
-import {fmt, ring} from "./ui";
+import {AlertTriangle, Anchor, Check, ExternalLink, FileText, Fish, Leaf, Users, Waves} from "lucide-react";
+import {fleetViewport, getInvestigation, getFleetMetadata, runCounterfactual, runFleetScan, showPct, NOT_AVAILABLE} from "./lib/oiltrace";
+import {Badge, Card, fmt, ring} from "./ui";
 import {MapView} from "./components/MapView";
 import {ReportModal} from "./components/ReportModal";
 import {CandidateList} from "./components/CandidateList";
-import {IncidentBrief} from "./components/IncidentBrief";
-import {IncidentCaseFile} from "./components/IncidentCaseFile";
+import {VesselDetail} from "./components/VesselDetail";
+import {GovernmentActions} from "./components/GovernmentActions";
+import {ResponsePriorityStrip} from "./components/ResponsePriorityStrip";
 import {PassControls} from "./components/PassControls";
 import {EvidencePanel} from "./components/EvidencePanel";
-import {GovernmentActions} from "./components/GovernmentActions";
 import {ModalFrame} from "./components/ModalFrame";
 import {ReplayBar} from "./components/ReplayBar";
 import type {ReplayFrame} from "./components/MapView";
@@ -19,7 +19,8 @@ import {FlowModal} from "./components/FlowModal";
 import {ModelInfoButton, ModelInfoModal} from "./components/ModelInfoModal";
 import {PassUploader} from "./components/PassUploader";
 import {VesselsAtRiskStrip} from "./components/VesselsAtRiskStrip";
-import type {Candidate, RiskEntry, Scan, Ship, SpillEntry,
+import {MAP_COLOURS as C} from "./mapColours";
+import type {Candidate, ForecastPoint, RiskEntry, Scan, Ship, SpillEntry,
               TrackFix} from "./types";
 
 /**
@@ -158,7 +159,6 @@ function App() {
   const source = scan?.source;
   const candidates = scan?.candidates || [];
   const forecast = scan?.forecast;
-  const age = scan?.age;
   const area = scan?.affected_area;
   const detected = scan?.status === "SPILL_DETECTED";
 
@@ -176,13 +176,16 @@ function App() {
   const shownForecastHeatmap = shown?.forecast_heatmap ?? scan?.forecast_heatmap;
   const shownArea = shown?.affected_area ?? area;
   const shownForecast = shown?.forecast ?? forecast;
-  const shownAge = shown?.age ?? age;
   const shownCandidates = shown?.candidates ?? candidates;
   const shownAis = shown?.ais ?? scan?.ais;
   // The backend owns the weighting; the panel only displays it. Falling back to
   // the documented 0.40/0.30/0.30 keeps the breakdown renderable against the
   // stored case, which carries no weights block.
   const weights = shownAis?.weights ?? {proximity: 0.4, trajectory: 0.3, behaviour: 0.3};
+  const rankByMmsi = useMemo(
+    () => Object.fromEntries(shownCandidates.map((c: Candidate) => [c.mmsi, c])),
+    [shownCandidates]
+  );
   // Surfaced rather than reworded: the scan already asserts this.
   // The report describes the spill currently in view. Without this it always
   // described spills[0], which is wrong the moment a pass has two detections.
@@ -208,6 +211,10 @@ function App() {
   const selectedRisk = selected
     ? shown?.risk?.at_risk.find((risk) => risk.ship_id === selected.id)
     : undefined;
+  // Selecting an at-risk vessel shows its detour immediately — no extra click.
+  // Its original (projected) path is drawn unconditionally by MapView already;
+  // this is the piece that used to require a separate "Show route" press.
+  const rerouteOnSelect = (shipId: string) => riskByShipId[shipId]?.detour ? shipId : null;
 
 
   const whatIfKey = (spillShipId: string, mmsi: number) => `${spillShipId}:${mmsi}`;
@@ -314,7 +321,7 @@ function App() {
     setFocusedSpillId(shownSpill?.ship_id ?? null);
     setEvidenceMmsi(c.mmsi);
     setSelected(fleet.find((f) => f.id === c.ship_id) ?? null);
-    setRerouteFor(null);
+    setRerouteFor(rerouteOnSelect(c.ship_id));
   };
   const top = shownCandidates[0];
   const evidenceCandidate = selected
@@ -327,7 +334,8 @@ function App() {
     view, envelope, detected, shownSpill, shownArea, shownSource, source,
     showEnvelope, onToggleEnvelope: () => setShowEnvelope((value) => !value),
     shownForecast, selectedRisk, selected, setSelected: (ship: Ship) => {
-      setSelected(ship); setEvidenceMmsi(ship.mmsi); setRerouteFor(null); setFocusedSpillId(shownSpill?.ship_id ?? null);
+      setSelected(ship); setEvidenceMmsi(ship.mmsi); setFocusedSpillId(shownSpill?.ship_id ?? null);
+      setRerouteFor(rerouteOnSelect(ship.id));
     }, fleet, riskByShipId, legendOpen, setLegendOpen,
     environment: scan.environment, showEnvironment, setShowEnvironment,
     sourceHeatmap: shownSourceHeatmap, showSourceHeatmap, setShowSourceHeatmap,
@@ -347,48 +355,141 @@ function App() {
     <div className="mapfill"><MapView {...mapProps} mapStyle={{height: "100%", width: "100%"}} /></div>
   </div>;
 
-  const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({behavior: "smooth", block: "start"});
-  const demoScenario = scan.traffic?.co_presence === "constructed" || scan.provenance?.simulation_seed != null;
-  return <div className="app workstation case-workstation">
+  const routeShown = !!(selectedRisk?.detour && rerouteFor === selected?.id);
+  const topN = 5;
+
+  return <div className="app workstation">
     <header className="topbar">
       <div className="brand"><div className="brandmark"><Anchor size={21}/></div><div><b>OILTRACE AI</b><small>Maritime Forensics</small></div></div>
       <div className="incident-id">Incident #{incidentId}</div>
-      <nav className="incident" aria-label="Investigation"><button className="reportbtn" onClick={() => openPanel("method")}>How this was derived</button><ModelInfoButton onClick={() => openPanel("models")} /><button className="reportbtn openreport" onClick={() => openPanel("report")}><FileText size={14}/> Report</button></nav>
+      <nav className="incident" aria-label="Investigation">
+        <button className="reportbtn" onClick={() => openPanel("method")}>How this was derived</button>
+        <ModelInfoButton onClick={() => openPanel("models")} />
+        <button className="reportbtn openreport" onClick={() => openPanel("report")}><FileText size={14}/> Report</button>
+      </nav>
     </header>
-    <div className="workspace-toolbar"><div className={`incident-status ${detected ? "warning" : "clear"}`}>{detected ? <AlertTriangle size={14}/> : <Check size={14}/>} {detected ? "INVESTIGATION REQUIRED" : "NO SPILL DETECTED"}</div>
-      <div className="workspace-context">{scan.region?.split(" — ")[0] ?? "Monitoring area"}{scan.observed_at && <span> · {scan.observed_at.slice(11, 16)} UTC</span>}</div>
-      <button className="text-button" onClick={() => openPanel("data")}>Observations & fleet</button>
-      {detected && <button className="text-button" onClick={() => openPanel("routing")}>Vessel routing</button>}
+
+    {/* One-line verdict, large and unmistakable — red only when the model actually found oil. */}
+    <div className={`alertbar${detected ? "" : " ok"}`}>
+      {detected ? <AlertTriangle size={22}/> : <Check size={22}/>}
+      <b>{detected ? "OIL SPILL DETECTED" : "NO OIL DETECTED"}</b>
+      <span>{scan.message}</span>
     </div>
-    <div className="case-masthead"><div><span className="eyebrow">INCIDENT CASE FILE</span><h1>{scan.region?.split(" — ")[0] ?? "Maritime investigation"}</h1><p>{scan.observed_at?.slice(0, 10) ?? "Stored observation"} · {scan.observed_at?.slice(11, 19) ?? "Time unavailable"} UTC · {scan.snapshot_id?.toUpperCase() ?? "Stored result"}</p></div><div className="case-source-status"><span className="data-tag">{demoScenario ? "DEMO / SCENARIO DATA" : fallback ? "STORED RESULT" : "CONNECTED INPUT"}</span><small>{demoScenario ? "Public SAR tiles · recorded AIS with aligned timing" : scan.provenance?.sar_input?.source ?? "See data provenance"}</small><small>{scan.environment?.environment_mode === "historical" ? "Historical environmental input" : "Assumed wind / current"}</small></div></div>
-    <main className="layout overview-layout" id="operational-map">
-      <section className="mapwrap"><div className="maphead"><PassControls ids={scan.available_snapshots ?? []} current={scan.snapshot_id} times={snapshotTimes} busy={running} onChange={changeSnapshot}/>
-        <div className="maptools"><a className="icon-button" title="Open full map" aria-label="Open full map" target="_blank" rel="noreferrer" href={fullMapUrl.toString()}><ExternalLink size={15}/></a></div></div>
+
+    <main className="layout">
+      {/* ---------------- left: fleet + forecast ---------------- */}
+      <aside className="left">
+        <Card>
+          <div className="eyebrow">MONITORED FLEET<span className="eyebrowright">{running ? "scanning…" : `${fleet.length} vessels`}</span></div>
+          <PassControls ids={scan.available_snapshots ?? []} current={scan.snapshot_id} times={snapshotTimes} busy={running} onChange={changeSnapshot}/>
+          <PassUploader existing={scan.available_snapshots ?? []} busy={running}
+            onCreated={(id) => changeSnapshot(id)}
+            onDeleted={(id) => {const next = scan.available_snapshots?.filter((sid) => sid !== id).slice(-1)[0]; if (id === scan.snapshot_id && next && next !== routeSnapshot) changeSnapshot(next); else load(routeSnapshot);}}/>
+          <div className="candidates">
+            {fleet.length ? fleet.map((s) => <button key={s.id} className={`candidate${selected?.id === s.id ? " selected" : ""}`}
+                onClick={() => {setSelected(s); setEvidenceMmsi(s.mmsi); setRerouteFor(rerouteOnSelect(s.id)); setFocusedSpillId(shownSpill?.ship_id ?? null);}}>
+              <div className="rank"><i className="dot" style={{background: s.oil_detected ? C.spillFill : C.vesselFill}}/></div>
+              <div className="cv"><b>{s.name}</b><small>{s.vessel_type} · {fmt(s.speed_kt)} kt</small></div>
+              <strong style={{color: s.oil_detected ? "var(--danger)" : "var(--ink-mute)"}}>{s.confidence ? showPct(s.confidence, 0) : "—"}</strong>
+            </button>) : <div className="empty">Fleet data unavailable in this mode.</div>}
+          </div>
+        </Card>
+
+        {sel && (sel.forecast?.points?.length ?? 0) > 0 && <Card>
+          <div className="eyebrow">WHERE THIS OIL GOES NEXT<Badge tone="amber">KINEMATIC</Badge></div>
+          <div className="cardsub">From {selected?.name}</div>
+          <div className="metrics tight">
+            {(sel.forecast?.points || []).map((p: ForecastPoint) => <div key={p.hours_ahead}>
+              <small>+{p.hours_ahead} h</small><b className="md">{p.latitude.toFixed(3)}, {p.longitude.toFixed(3)}</b>
+            </div>)}
+          </div>
+        </Card>}
+      </aside>
+
+      {/* ---------------- map ---------------- */}
+      <section className="mapwrap">
+        <div className="maphead">
+          <div><span className="eyebrow">MONITORING MAP</span><h1>{scan.region || "Monitoring area"}</h1>
+            <div className="subtle">{scan.observed_at ? `${String(scan.snapshot_id).toUpperCase()} · ${scan.observed_at.slice(0, 16).replace("T", " ")} UTC` : "Stored result"}</div></div>
+          <div className="maptools">
+            {detected ? <><Badge tone="red">SPILL</Badge><Badge tone="amber">SOURCE ESTIMATE</Badge></> : <Badge tone="blue">ALL CLEAR</Badge>}
+            <a className="icon-button" title="Open full map" aria-label="Open full map" target="_blank" rel="noreferrer" href={fullMapUrl.toString()}><ExternalLink size={15}/></a>
+          </div>
+        </div>
         <MapView {...mapProps}/>
         {running && <div className="scanning" role="status"><span className="spinner"/>Analysing imagery…</div>}
-        <div className="map-caption"><span><i className="key-dot spill-key"/>Detected spill</span><span><i className="key-dot source-key"/>Probable source</span><span><i className="key-line"/>Forecast</span><span>Wind · Current · Resultant</span><span>Heat = model spread</span></div>
       </section>
-      <IncidentBrief scan={scan} entry={shown} top={top} onEvidence={() => {if(top) selectCandidate(top); scrollTo("attribution-evidence");}}/>
+
+      {/* ---------------- right: the selected vessel, and its route if it's at risk ---------------- */}
+      <VesselDetail selected={selected} sel={sel} selectedRisk={selectedRisk} scan={scan} rankByMmsi={rankByMmsi}
+        routeShown={routeShown} onToggleRoute={() => {if (!selected) return; setRerouteFor(routeShown ? null : selected.id); setPlaying(false); setReplayT(null);}}
+        environment={scan.environment}/>
     </main>
+
+    <div className="below-main">
+    {/* ---------------- replay: its own slot, not squeezed into the map card ---------------- */}
     <ReplayBar detected={detected} timeline={timeline} replayOn={replayT != null} replayT={replayT} setReplayT={setReplayT} playing={playing} setPlaying={setPlaying} replayFrame={replayFrame}/>
-    <nav className="case-navigation" aria-label="Case file sections">{[["satellite-observation", "01 Satellite"], ...(detected ? [["source-reconstruction", "02 Source & environment"], ["vessel-investigation", "03 Vessels"], ["attribution-evidence", "04 Evidence"], ["forecast-exposure", "05 Exposure"]] : []), ["response-output", "Response & report"]].map(([id,label]) => <button key={id} onClick={() => scrollTo(id)}>{label}</button>)}</nav>
-    <IncidentCaseFile scan={scan} entry={shown} candidate={evidenceCandidate} candidates={shownCandidates} selected={selected} weights={weights} onSelect={selectCandidate} onOpenAll={() => openPanel("candidates")} onReport={() => openPanel("report")} onRouting={() => openPanel("routing")} onFocusMap={() => scrollTo("operational-map")} onForecast={(hours) => {if(scan.observed_at) {setPlaying(false); setReplayT(Date.parse(scan.observed_at) + hours * HOUR_MS); scrollTo("operational-map");}}} onSnapshot={changeSnapshot} snapshotTimes={snapshotTimes} busy={running} test={evidenceCandidate ? whatIf[whatIfKey(shownSpill?.ship_id ?? "", evidenceCandidate.mmsi)] : undefined} testBusy={whatIfBusy != null} onTest={askWhatIf}/>
 
-    <footer className="workstation-footer"><span>Attribution score is an investigation aid, not a legal determination of responsibility.</span><span>{fallback ? "Stored result" : scan.traffic?.co_presence === "constructed" ? "Recorded AIS · aligned scenario" : "SAR + AIS"}{scan.ais_currency?.stale ? " · AIS delayed" : ""}</span></footer>
+    {/* ---------------- attribution: who was near the estimated source ---------------- */}
+    {detected && <Card>
+      <div className="eyebrow">TOP CANDIDATES<span className="eyebrowright">{shownCandidates.length} in range</span></div>
+      <p className="reportnote">AIS-only correlation — no independent SAR vessel detection is connected.</p>
+      <CandidateList candidates={shownCandidates.slice(0, topN)} selectedId={evidenceCandidate?.ship_id} onSelect={selectCandidate}/>
+      {shownCandidates.length > topN && <button className="view-all-button" onClick={() => openPanel("candidates")}>View all {shownCandidates.length} candidates</button>}
+      {evidenceCandidate && <>
+        <EvidencePanel candidate={evidenceCandidate} entry={shown} weights={weights}/>
+        <button className="reportbtn" disabled={whatIfBusy != null || !shown?.age?.release_at} onClick={() => askWhatIf(evidenceCandidate)}>
+          {whatIfBusy ? "Testing…" : "Test source consistency"}
+        </button>
+        {whatIf[whatIfKey(shownSpill?.ship_id ?? "", evidenceCandidate.mmsi)] && <p className="compact-result">
+          {(() => {const t = whatIf[whatIfKey(shownSpill?.ship_id ?? "", evidenceCandidate.mmsi)]; return t.available ? `${t.within_envelope ? "Consistent" : "Not consistent"} · miss ${fmt(t.miss_distance_km, 2)} km` : "Test unavailable";})()}
+        </p>}
+      </>}
+    </Card>}
 
-    {panel === "candidates" && <ModalFrame title={`All ${shownCandidates.length} candidates`} onClose={closePanel}><CandidateList candidates={shownCandidates} selectedId={selected?.id} onSelect={(c) => {selectCandidate(c); openPanel("evidence");}}/></ModalFrame>}
-    {panel === "evidence" && <ModalFrame title="Vessel evidence" onClose={closePanel}>{evidenceCandidate ? <><EvidencePanel candidate={evidenceCandidate} entry={shown} weights={weights}/><button className="reportbtn" disabled={whatIfBusy != null || !shown?.age?.release_at} onClick={() => {selectCandidate(evidenceCandidate); askWhatIf(evidenceCandidate);}}>{whatIfBusy ? "Testing…" : "Test source consistency"}</button>
-      {whatIf[whatIfKey(shownSpill?.ship_id ?? "", evidenceCandidate.mmsi)] && <p className="compact-result">{(() => {const test = whatIf[whatIfKey(shownSpill?.ship_id ?? "", evidenceCandidate.mmsi)]; return test.available ? `${test.within_envelope ? "Consistent" : "Not consistent"} · miss ${fmt(test.miss_distance_km, 2)} km` : "Test unavailable";})()}</p>}</> : <p>No candidate evidence available.</p>}</ModalFrame>}
-    {panel === "method" && <FlowModal onClose={closePanel} traffic={scan.traffic}/>}
+    {/* ---------------- response: which spill first, and what to do ---------------- */}
+    {detected && (allSpills.length > 1 && (scan.response_priorities?.length ?? 0) > 0
+      ? <ResponsePriorityStrip priorities={scan.response_priorities || []} spills={allSpills} selected={selected}
+          onSelect={(shipId) => {setFocusedSpillId(shipId); setSelected(fleet.find((f) => f.id === shipId) ?? null); setRerouteFor(rerouteOnSelect(shipId));}}/>
+      : <Card>
+          <div className="eyebrow">RESPONSE</div>
+          <div className="response-task"><span className="data-tag">{shown?.response_priority ?? "REVIEW"} · {shown?.response?.urgency ?? "INVESTIGATE"}</span>
+            <p>{shown?.response?.action ?? "Verify the detection and notify the relevant maritime authority."}</p></div>
+          <GovernmentActions topCandidate={top?.name} urgency={shown?.response?.urgency}/>
+        </Card>)}
+
+    {/* ---------------- environmental & human impact: honest about what isn't measured ---------------- */}
+    {detected && <Card>
+      <div className="eyebrow">ENVIRONMENTAL & HUMAN IMPACT</div>
+      <div className="metrics">
+        <div><small>Potential envelope</small><b>{fmt(area?.radius_km, 2)} km radius · {fmt(area?.area_km2, 1)} km²</b></div>
+        <div><small>Centred on</small><b>{spill ? `${fmt(spill.latitude, 3)}, ${fmt(spill.longitude, 3)}` : NOT_AVAILABLE}</b></div>
+      </div>
+      <div className="impact-checklist">
+        <div><Fish size={17}/><div><b>Fishing &amp; aquaculture</b><span>Active fishing grounds and licensed aquaculture sites inside the envelope.</span></div></div>
+        <div><Leaf size={17}/><div><b>Protected areas &amp; wildlife</b><span>Marine protected areas, nesting sites, and any threatened-species range.</span></div></div>
+        <div><Users size={17}/><div><b>Coastal communities</b><span>Drinking-water intakes and livelihoods that depend on these waters.</span></div></div>
+        <div><Waves size={17}/><div><b>Tourism &amp; recreation</b><span>Beaches, dive sites and recreational waters that may need closure.</span></div></div>
+      </div>
+    </Card>}
+
+    {/* ---------------- forward risk: vessels projected to enter the spill, and their reroute ---------------- */}
+    {detected && shownRisk && <VesselsAtRiskStrip risk={shown?.risk} selected={selected} selectedRisk={selectedRisk}
+      rerouteFor={rerouteFor} setRerouteFor={(id) => {setRerouteFor(id); setPlaying(false); setReplayT(null);}}
+      onSelect={(shipId, spillShipId) => {setFocusedSpillId(spillShipId ?? null); setSelected(fleet.find((f) => f.id === shipId) ?? null); setRerouteFor(rerouteOnSelect(shipId));}}/>}
+    </div>
+
+
+    <footer className="workstation-footer">
+      <span>Attribution score is an investigation aid, not a legal determination of responsibility.</span>
+      <span>{fallback ? "Stored result" : scan.traffic?.co_presence === "constructed" ? "Recorded AIS · aligned scenario" : "SAR + AIS"}{scan.ais_currency?.stale ? " · AIS delayed" : ""}</span>
+    </footer>
+
+    {panel === "candidates" && <ModalFrame title={`All ${shownCandidates.length} candidates`} onClose={closePanel}>
+      <CandidateList candidates={shownCandidates} selectedId={evidenceCandidate?.ship_id} onSelect={(c) => {selectCandidate(c); closePanel();}}/></ModalFrame>}
+    {panel === "method" && <FlowModal onClose={closePanel} spillName={shownSpill?.ship_name}/>}
     {panel === "models" && <ModelInfoModal onClose={closePanel}/>}
     {panel === "report" && <ReportModal scan={scan} detected={detected} onClose={closePanel} entry={shown} index={shownSpillIndex} total={allSpills.length} candidates={shownCandidates} weights={weights} counterfactuals={reportCounterfactuals} reroute={reportReroute} risk={shown?.risk}/>}
-    {panel === "data" && <ModalFrame title="Observations & fleet" onClose={closePanel}>
-      <label className="observation-select">Observation <select value={scan.snapshot_id ?? ""} disabled={running} onChange={(e) => changeSnapshot(e.target.value)}>{(scan.available_snapshots ?? []).map((id, i) => <option key={id} value={id}>Observation {i + 1}</option>)}</select></label>
-      {allSpills.length > 1 && <label className="observation-select">Detection <select value={shownSpill?.ship_id} onChange={(e) => {setFocusedSpillId(e.target.value); setSelected(null); setRerouteFor(null);}}>{allSpills.map((sp, i) => <option key={sp.spill.ship_id} value={sp.spill.ship_id}>{i + 1} · near {sp.spill.ship_name}</option>)}</select></label>}
-      <PassUploader existing={scan.available_snapshots ?? []} busy={running} onCreated={(id) => {changeSnapshot(id);}} onDeleted={(id) => {const next = scan.available_snapshots?.filter((sid) => sid !== id).slice(-1)[0]; if (id === scan.snapshot_id && next && next !== routeSnapshot) changeSnapshot(next); else load(routeSnapshot);}}/>
-      <div className="fleet-drawer">{fleet.map((ship) => <button className="fleet-row" key={ship.id} onClick={() => {setSelected(ship); setFocusedSpillId(shownSpill?.ship_id ?? null); closePanel();}}><b>{ship.name}</b><span>{ship.vessel_type}</span><small>{fmt(ship.speed_kt, 1)} kt</small></button>)}</div>
-    </ModalFrame>}
-    {panel === "routing" && <ModalFrame title="Vessel routing" onClose={closePanel}><VesselsAtRiskStrip risk={shown?.risk} fleet={fleet} selected={selected} selectedRisk={selectedRisk} rerouteFor={rerouteFor} setRerouteFor={(id) => {setRerouteFor(id); setPlaying(false); setReplayT(null); closePanel();}} onSelect={(id) => {setSelected(fleet.find((ship) => ship.id === id) ?? null); setRerouteFor(null);}}/>{!shown?.risk && <p>No routing data available.</p>}</ModalFrame>}
   </div>;
 }
 

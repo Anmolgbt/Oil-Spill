@@ -5,7 +5,6 @@ import type {RiskEntry, RiskOverview, Ship} from "../types";
 
 export interface VesselsAtRiskStripProps {
   risk?: RiskOverview | null;
-  fleet: Ship[];
   selected: Ship | null;
   selectedRisk?: RiskEntry | null;
   /** Which vessel's detour is currently drawn on the map. */
@@ -24,7 +23,7 @@ export interface VesselsAtRiskStripProps {
  * so is the part that needs an explicit action.
  */
 export function VesselsAtRiskStrip({
-  risk: shownRisk, fleet, selected, selectedRisk, rerouteFor, setRerouteFor, onSelect,
+  risk: shownRisk, selected, selectedRisk, rerouteFor, setRerouteFor, onSelect,
 }: VesselsAtRiskStripProps) {
   // A detection with no forward-risk block has nothing to say here, and every
   // field below would otherwise need its own guard.

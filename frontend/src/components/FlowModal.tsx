@@ -1,18 +1,23 @@
 import {ModalFrame} from "./ModalFrame";
-import type {Traffic} from "../types";
-export interface FlowModalProps { onClose: () => void; spillName?: string; traffic?: Traffic | null; }
-const pipeline = [
-  ["SAR image", "Satellite image input"],
-  ["Spill detection", "CNN classification"],
-  ["Look-alike filter", "No separate filter supplied"],
-  ["Backward hindcast", "Estimated release position"],
-  ["AIS correlation", "Vessels in the release window"],
-  ["Attribution score", "Proximity · trajectory · behaviour"],
-  ["Forecast", "Projected drift"],
-];
-export function FlowModal({onClose, traffic}: FlowModalProps) {
-  return <ModalFrame title="How this was derived" onClose={onClose}>
-    <ol className="method-steps">{pipeline.map(([label, detail], index) => <li key={label}><span>{String(index + 1).padStart(2, "0")}</span><div><b>{label}</b><small>{detail}</small></div></li>)}</ol>
-    {traffic?.co_presence === "constructed" && <small className="subtle">Recorded AIS · aligned scenario timestamps</small>}
+import {STAGES} from "../stages";
+
+export interface FlowModalProps { onClose: () => void; spillName?: string; }
+
+/**
+ * HOW THIS WAS DERIVED — every stage runs automatically the moment a pass
+ * arrives; nothing here is a gate the person has to click through. What
+ * matters is the distinction each stage carries: what it establishes, and
+ * what it does not. Only stage one is a measurement — everything after it
+ * inherits the error of the step before.
+ */
+export function FlowModal({onClose, spillName}: FlowModalProps) {
+  return <ModalFrame title="How this was derived" onClose={onClose} className="reportbox flowbox">
+    <p className="flowintro">{spillName ? `The signature near ${spillName}, traced stage by stage.` : "The investigation pipeline, in the order it actually runs."}</p>
+    <ol className="flowstages">
+      {STAGES.map((s, i) => <li key={s.key}>
+        <span className="flownum" aria-hidden="true">{i + 1}</span>
+        <div><b>{s.label}</b><span>{s.establishes}</span><em>{s.limits}</em></div>
+      </li>)}
+    </ol>
   </ModalFrame>;
 }

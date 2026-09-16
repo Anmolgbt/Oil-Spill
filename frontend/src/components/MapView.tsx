@@ -7,7 +7,7 @@ import {fmt} from "../ui";
 import {MAP_COLOURS as C} from "../mapColours";
 import {EnvironmentLayer} from "./EnvironmentLayer";
 import {ThermalHeatmapLayer} from "./ThermalHeatmapLayer";
-import type {Candidate, Counterfactual, Environment, EnvironmentalDrift, ForecastHeatmap, LatLon, RiskEntry, Ship,
+import type {Candidate, Counterfactual, Environment, EnvironmentalDrift, ForecastHeatmap, RiskEntry, Ship,
               Source, SourceHeatmap, Spill, AffectedArea, Forecast} from "../types";
 
 const FALLBACK_CENTER: [number, number] = [28.55, -94.85];
@@ -81,6 +81,28 @@ function MapFit({points}: {points: [number, number][] | null}) {
 }
 
 /**
+ * Keeps Leaflet's internal size cache honest whenever the browser window (or
+ * this map's own grid column) changes size — independent of whether there's
+ * anything to re-fit bounds to. Without this, resizing the window while the
+ * map had fewer than two points to fit (e.g. before a detour or track exists)
+ * left Leaflet rendering at its stale original size: tiles stop short of the
+ * container's right edge, which reads as empty space next to the map.
+ */
+function MapResize() {
+  const map = useMap();
+  useEffect(() => {
+    const invalidate = () => map.invalidateSize({animate: false});
+    window.addEventListener("resize", invalidate);
+    // Catches layout shifts that aren't a window resize at all — the sidebar
+    // cards changing height, a panel opening/closing, fonts finishing load.
+    const ro = new ResizeObserver(invalidate);
+    ro.observe(map.getContainer());
+    return () => { window.removeEventListener("resize", invalidate); ro.disconnect(); };
+  }, [map]);
+  return null;
+}
+
+/**
  * The Leaflet map itself, factored out so the same map can render inside the
  * normal dashboard layout AND full-size in its own browser tab (opened via
  * "Open map in new tab", for a screen where the docked map panel is too
@@ -101,8 +123,9 @@ export function MapView({view, envelope, detected, shownSpill, shownArea, shownS
   return (
     <MapContainer center={view?.center ?? FALLBACK_CENTER} zoom={7}
                   className="map" style={mapStyle} scrollWheelZoom>
+      <MapResize/>
       <MapFit points={showDetour && selectedRisk?.detour
-        ? selectedRisk.detour.detour_waypoints.map((p) => [p.latitude, p.longitude] as [number, number])
+        ? [...(view?.points ?? []), ...selectedRisk.detour.detour_waypoints.map((p) => [p.latitude, p.longitude] as [number, number])]
         : view?.points ?? null} />
       <LayersControl position="topright">
         <LayersControl.BaseLayer checked name="Satellite">
