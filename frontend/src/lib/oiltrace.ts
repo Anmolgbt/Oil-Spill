@@ -13,7 +13,10 @@
  * Nothing here computes or substitutes values. A field the AI did not produce
  * stays null and is rendered as "Not available" by the UI.
  */
-export const API = "http://localhost:8000";
+/** Backend origin. Override with VITE_API_URL at build or dev time (see
+ *  frontend/.env.example); the localhost default keeps `npm run dev` working
+ *  with no configuration. */
+export const API = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
 /** Backend-served paths (/simulation-images/..., /ai-images/...) need the API
  *  origin, because the page itself is served by Vite on another port. */
@@ -100,70 +103,6 @@ function adaptRaw(ai: any) {
 }
 
 /**
- * Adapt POST /ai/investigate onto the shape the dashboard already renders.
- *
- * Field names line up with the stored-result adapter deliberately, so the UI does
- * not need to know which produced the data. CNN validation metrics are fetched
- * separately: they describe the model, not this run, so the live pipeline does
- * not (and should not) return them per request.
- */
-async function adaptLive(live: any) {
-  if (!live?.detection) return null;
-  const clear = live.status !== "SPILL_CONFIRMED";
-  const metrics = await tryFetch(`${API}/ai-result/metrics`);
-
-  return {
-    system: "OILTRACE", version: "live", mode: "LIVE_INFERENCE",
-    status: live.status, message: live.message ?? null,
-    detection: {
-      prediction: live.detection.prediction,
-      oil_detected: live.detection.class_id === 1,
-      class: live.detection.class_id,
-      confidence: live.detection.confidence,
-      probabilities: live.detection.probabilities,
-      model: live.detection.model,
-      task: "classification",
-      performs_segmentation: false,
-      // The scene the CNN actually classified.
-      image_url: apiUrl("/ai-images/class_1.jpg"),
-      estimated_area_km2: null, mask_url: null,
-      oil_thickness: null, oil_volume: null,
-      inference_ms: live.detection.inference_ms,
-      device: live.detection.device,
-      evidence_class: "MODEL OUTPUT",
-    },
-    spill: {
-      latitude: live.spill?.latitude, longitude: live.spill?.longitude,
-      note: live.spill?.note, evidence_class: "SUPPLIED INPUT",
-    },
-    source: clear ? null : {...live.source, evidence_class: "MODEL ESTIMATE"},
-    ais: clear ? null : {
-      candidate_count: live.ais?.candidate_count ?? 0,
-      model: live.ais?.model,
-      detailed_candidates: live.ais?.candidates?.length ?? 0,
-      candidates: live.ais?.candidates ?? [],
-      search_radius_km: live.ais?.search_radius_km,
-      records_in_window: live.ais?.records_in_window,
-      records_within_radius: live.ais?.records_within_radius,
-      weights: live.ais?.weights,
-      note: `${live.ais?.records_in_window ?? 0} AIS records in the ±2 h window, ` +
-            `${live.ais?.candidate_count ?? 0} vessels within ${live.ais?.search_radius_km ?? 50} km of the estimated source.`,
-      evidence_class: "ANALYTICAL RANKING",
-    },
-    forecast: clear ? null : {...live.forecast, evidence_class: "PREDICTION"},
-    cnn_validation: metrics ?? null,
-    model_status: null,
-    interpretation: live.interpretation ?? {},
-    provenance: {
-      source: "live_inference",
-      detail: "Both trained models run now against the supplied scene.",
-      live_inference: true,
-      elapsed_ms: live.elapsed_ms,
-    },
-  };
-}
-
-/**
  * The completed AI investigation, or null if neither source is reachable.
  * Image URLs are absolutised here so the caller never has to know the origin.
  */
@@ -174,20 +113,6 @@ export async function getInvestigation() {
   }
   const local = await tryFetch("/ai-data/oiltrace_ai_output_final.json");
   return adaptRaw(local);
-}
-
-/** Map viewport derived from whatever coordinates the result actually contains. */
-export function viewportFrom(inv: any): {center: [number, number]; points: [number, number][]} | null {
-  const pts: [number, number][] = [];
-  if (typeof inv?.spill?.latitude === "number") pts.push([inv.spill.latitude, inv.spill.longitude]);
-  if (typeof inv?.source?.latitude === "number") pts.push([inv.source.latitude, inv.source.longitude]);
-  for (const p of inv?.forecast?.points || []) {
-    if (typeof p.latitude === "number") pts.push([p.latitude, p.longitude]);
-  }
-  if (!pts.length) return null;
-  const lat = pts.reduce((a, p) => a + p[0], 0) / pts.length;
-  const lon = pts.reduce((a, p) => a + p[1], 0) / pts.length;
-  return {center: [lat, lon], points: pts};
 }
 
 /**
@@ -228,3 +153,75 @@ export function fleetViewport(scan: any): {center: [number, number]; points: [nu
   const lon = pts.reduce((a, p) => a + p[1], 0) / pts.length;
   return {center: [lat, lon], points: pts};
 }
+
+/**
+ * COUNTERFACTUAL — "what if this vessel caused the spill?"
+ *
+ * Sends the detection's own figures back to the API, which runs the hindcast's
+ * drift vector forward from the vessel's real AIS position at the estimated
+ * release time. Returns a distance between simulated and observed, not a
+ * verdict. Null if the backend is unreachable.
+ */
+export async function runCounterfactual(args: {
+  mmsi: number;
+  release_at: string;
+  spill_latitude: number;
+  spill_longitude: number;
+  age_hours: number;
+  /** Context only — the backend derives the threshold from its own drift. */
+  affected_area_radius_km?: number | null;
+  /** Override for that derived threshold. Tests use it; the app does not. */
+  envelope_radius_km?: number | null;
+  source_latitude?: number | null;
+  source_longitude?: number | null;
+}) {
+  return tryFetch(`${API}/fleet/counterfactual`, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(args),
+  }, 15000);
+}
+
+/** Which id the next uploaded pass would take. */
+export async function peekNextPass() {
+  return tryFetch(`${API}/fleet/passes/next`);
+}
+
+/**
+ * Create the next satellite pass from dropped images.
+ *
+ * Returns the backend's summary — including which image was paired with which
+ * vessel, and that no ground truth exists for an uploaded pass — or an object
+ * carrying `error` so the caller can say what went wrong rather than failing
+ * silently.
+ */
+export async function uploadPass(files: File[]) {
+  const form = new FormData();
+  for (const f of files) form.append("files", f, f.name);
+  try {
+    const res = await fetch(`${API}/fleet/passes`, {method: "POST", body: form});
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      return {error: body?.detail ?? `Upload failed (${res.status}).`};
+    }
+    return body;
+  } catch {
+    return {error: "Could not reach the backend."};
+  }
+}
+
+/** Remove an uploaded pass. t1-t3 ship with the repo and are protected. */
+export async function deletePass(snapshotId: string) {
+  try {
+    const res = await fetch(`${API}/fleet/passes/${snapshotId}`, {method: "DELETE"});
+    return res.ok ? await res.json() : {error: `Could not delete ${snapshotId}.`};
+  } catch {
+    return {error: "Could not reach the backend."};
+  }
+}
+
+/** Configured pass times, without running inference again. */
+export async function getFleetMetadata(): Promise<{snapshot_times?: Record<string, string>} | null> {
+  return tryFetch(`${API}/fleet`);
+}
+export const imageSource = (path?: string | null) => !path ? undefined : /^https?:\/\//.test(path) || path.startsWith("/ai-data/") ? path : `${API}${path}`;

@@ -16,3 +16,10 @@ dist/
 # OS
 .DS_Store
 Thumbs.db
+
+# Uploaded passes are demo state, not repo content. t1-t3 ship with the repo;
+# anything created through POST /fleet/passes is local and disposable.
+backend/data/simulation/snapshots/*/
+!backend/data/simulation/snapshots/t1/
+!backend/data/simulation/snapshots/t2/
+!backend/data/simulation/snapshots/t3/

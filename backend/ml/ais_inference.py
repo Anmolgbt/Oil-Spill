@@ -106,23 +106,26 @@ def _reference_normalisation():
 
     Computed once. Without this, anomaly_score (and therefore behaviour_score)
     cannot be placed on the same 0-100 scale the completed case used.
+
+    Derived from scored_corpus() rather than recomputed. Both used to read the
+    same 5.3 MB CSV, run build_features() over it and call decision_function()
+    on all 52,596 rows — the identical work, twice, into two separate caches,
+    which is most of what made a cold scan take five and a half seconds.
+    scored_corpus()["anomaly_raw"] IS decision_function over exactly this frame,
+    so taking its min and max gives the same two numbers for half the work.
     """
     global _norm
     if _norm is not None:
         return _norm
-    if not AIS_REFERENCE_FILE.is_file():
+
+    corpus = scored_corpus()
+    if corpus is None:
         return None
 
-    import pandas as pd
-
-    scaler, model = _load()
-    raw = pd.read_csv(AIS_REFERENCE_FILE)
-    df = build_features(raw)
-    scores = model.decision_function(scaler.transform(df[FEATURES]))
     _norm = {
-        "min_raw": float(scores.min()),
-        "max_raw": float(scores.max()),
-        "records": int(len(df)),
+        "min_raw": float(corpus["anomaly_raw"].min()),
+        "max_raw": float(corpus["anomaly_raw"].max()),
+        "records": int(len(corpus)),
         "source": AIS_REFERENCE_FILE.name,
     }
     return _norm
@@ -257,3 +260,24 @@ def model_info():
             "error": f"{type(exc).__name__}: {exc}",
             "live_inference": False,
         }
+
+
+def warm_up():
+    """
+    Load the models and score the corpus ahead of the first request.
+
+    All of this is cached module-level and would otherwise be paid by whoever
+    happens to trigger the first scan — which, in a demo, is the audience.
+    Returns a short summary so the caller can log what was actually warmed.
+    """
+    result = {"models": False, "corpus_records": None, "normalisation": False}
+    try:
+        _load()
+        result["models"] = True
+    except Exception:
+        return result
+    corpus = scored_corpus()
+    if corpus is not None:
+        result["corpus_records"] = int(len(corpus))
+    result["normalisation"] = _reference_normalisation() is not None
+    return result

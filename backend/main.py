@@ -18,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from core.config import AI_OUTPUT_DIR, SIMULATION_DIR
-from routes import ais, cnn, fleet, investigate, stored_result
+from routes import ais, cnn, fleet, investigate, models, stored_result
 
 app = FastAPI(
     title="OILTRACE API",
@@ -29,6 +29,36 @@ app = FastAPI(
     ),
     version="1.0.0",
 )
+
+@app.on_event("startup")
+def _warm_models():
+    """
+    Load the models and score the AIS corpus during boot.
+
+    Scoring the 52,596-record corpus is unavoidable — behaviour scores are
+    normalised dataset-wide, so a single vessel cannot be placed on the 0-100
+    scale without it. What IS avoidable is paying for it on the first request,
+    which in a demo means the audience watches it happen. Doing it here moves
+    the cost to startup, where uvicorn is already booting.
+
+    Failures are logged and swallowed: a missing artifact must degrade the app,
+    not stop it from serving. The routes already report model availability.
+    """
+    import logging
+    log = logging.getLogger("oiltrace.startup")
+    try:
+        from ml.ais_inference import warm_up
+        summary = warm_up()
+        log.info("AIS model warm-up: %s", summary)
+    except Exception as exc:
+        log.warning("AIS model warm-up skipped: %s", exc)
+    try:
+        from ml.cnn_inference import load_model
+        load_model()
+        log.info("CNN warm-up: checkpoint loaded")
+    except Exception as exc:
+        log.warning("CNN warm-up skipped: %s", exc)
+
 
 # The Vite dev server runs on another port.
 app.add_middleware(
@@ -56,6 +86,7 @@ app.include_router(stored_result.router)
 app.include_router(cnn.router)
 app.include_router(ais.router)
 app.include_router(investigate.router)
+app.include_router(models.router)
 
 
 @app.get("/")

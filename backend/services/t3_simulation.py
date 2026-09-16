@@ -21,7 +21,7 @@ import json
 import random
 import shutil
 
-from core.config import SIMULATION_DIR, SIMULATION_SEED, T3_OIL_MAX, T3_OIL_MIN
+from core.config import BACKEND_DIR, SIMULATION_DIR, SIMULATION_SEED, T3_OIL_MAX, T3_OIL_MIN
 
 POOL_DIR = SIMULATION_DIR / "image_pool"
 CLEAN_POOL_DIR = POOL_DIR / "clean"
@@ -78,7 +78,9 @@ def assign_t3_images(ship_ids, seed=SIMULATION_SEED, oil_min=T3_OIL_MIN, oil_max
         assignments.append({
             "snapshot_id": "t3",
             "ship_id": ship_id,
-            "source_image": str(source),
+            # Relative to backend/, so the committed ground-truth file means the
+            # same thing on every machine. Resolve with BACKEND_DIR / value.
+            "source_image": str(source.relative_to(BACKEND_DIR)),
             "ground_truth_for_simulation": "oil" if is_oil else "no_oil",
         })
     return assignments
@@ -97,7 +99,8 @@ def write_t3_snapshot(fleet_ships, seed=SIMULATION_SEED, oil_eligible_ids=None):
     t3_dir.mkdir(parents=True, exist_ok=True)
     for ship in fleet_ships:
         assignment = by_ship[ship["id"]]
-        shutil.copyfile(assignment["source_image"], t3_dir / ship["image_filename"])
+        shutil.copyfile(BACKEND_DIR / assignment["source_image"],
+                        t3_dir / ship["image_filename"])
 
     GROUND_TRUTH_FILE.write_text(json.dumps({
         "seed": seed,

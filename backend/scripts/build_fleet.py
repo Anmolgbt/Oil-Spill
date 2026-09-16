@@ -51,7 +51,7 @@ SNAPSHOTS_DIR = SIMULATION_DIR / "snapshots"
 # Keep the monitored roster to vessels that the source corpus identifies by
 # name. The four anonymous records previously shown as "VESSEL <MMSI>" are
 # intentionally omitted from the walkthrough.
-FLEET_SIZE = 6
+FLEET_SIZE = 12
 # A real, historically busy patch of Gulf traffic. This is only used to pick a
 # CLUSTER out of the corpus — the vessels' own recorded coordinates, speed and
 # course are what gets used everywhere downstream.
@@ -88,16 +88,20 @@ def min_source_separation_km():
 
 # Vessels kept out of the demo fleet by name/MMSI. Not a data-quality
 # judgement — just fleet composition for the walkthrough.
+#
+# The four vessels the corpus records without a name used to be excluded here
+# so the walkthrough named every ship. They are now INCLUDED: unnamed AIS
+# records are a real and common feature of the data, and the search radius can
+# only be shown to reject irrelevant traffic if there is traffic to reject.
+# They appear as "VESSEL <MMSI>", which is what the corpus actually knows.
+# Spill sources are still drawn only from identified vessels (see
+# _pick_sources), so the demo still names a real, dimensioned vessel.
 EXCLUDE_MMSI = {
     636017298,   # KIDAN
     367441520,   # CAPT NICHOLAS
     369093000,   # KOLT LEVI — the track-quality filter also rejects it (it ran
                  # 194 km to net 38 km), but the exclusion is explicit so the
                  # removal holds if those thresholds are ever retuned.
-    636019218,   # unnamed in the corpus (displayed as VESSEL 636019218)
-    219025316,   # unnamed in the corpus (displayed as VESSEL 219025316)
-    636018579,   # unnamed in the corpus (displayed as VESSEL 636018579)
-    477430900,   # unnamed in the corpus (displayed as VESSEL 477430900)
 }
 
 # CROSSING and MOVING-AWAY vessels must start outside the obstacle the reroute
@@ -542,12 +546,24 @@ def build_fleet():
         })
 
     return {
-        "note": ("REAL AIS FLEET. Vessel identities, MMSIs, coordinates, speed and "
-                 "course are taken as recorded in data/ais_reference/ais_dataset.csv "
-                 "(Gulf of Mexico traffic) — nothing is invented. Each vessel's own "
-                 "recorded timestamps are shifted by a constant per-vessel offset "
-                 "onto a shared 3-pass demo clock (t1/t2/t3); the recorded order, "
-                 "spacing, speed and course between fixes are untouched."),
+        "note": ("REAL AIS FLEET, CONSTRUCTED CO-PRESENCE. Vessel identities, MMSIs, "
+                 "coordinates, speed and course are taken as recorded in "
+                 "data/ais_reference/ais_dataset.csv (Gulf of Mexico traffic) — nothing "
+                 "is invented, and no position is altered. What IS constructed is that "
+                 "these vessels are at sea at the same time: each vessel's recorded "
+                 "timestamps are shifted by a constant per-vessel offset onto a shared "
+                 "3-pass clock, so they can be observed together. Order, spacing, speed "
+                 "and course between fixes are untouched. This is necessary because the "
+                 "corpus samples TRANSITS rather than tracking continuously — a vessel "
+                 "typically appears for 1-2 hours and leaves, and measured across the "
+                 "corpus at most 4 vessels are simultaneously live at any instant, "
+                 "which is too few to monitor as a fleet. Unshifted, 10 of these 12 "
+                 "vessels would not yet have arrived at t1 and 11 of 12 would be up to "
+                 "7.7 h stale at t3."),
+        "co_presence": "constructed",
+        "co_presence_reason": ("The AIS corpus samples vessel transits, not continuous "
+                               "surveillance; no window exists in which this many vessels "
+                               "are tracked across three passes."),
         "synthetic": False,
         "coordinates_source": "real_ais",
         "region": "Gulf of Mexico — real AIS traffic cluster (demo AOI)",

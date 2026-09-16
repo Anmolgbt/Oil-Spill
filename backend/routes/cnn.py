@@ -33,7 +33,7 @@ async def cnn_predict(file: UploadFile = File(...)):
     except ImportError as exc:
         raise HTTPException(503, f"Inference dependencies unavailable: {exc}")
     except FileNotFoundError:
-        raise HTTPException(503, "Model checkpoint not found in models_artifacts/.")
+        raise HTTPException(503, "Model checkpoint not found in backend/artifacts/.")
     except Exception as exc:
         raise HTTPException(400, f"Could not run inference: {type(exc).__name__}: {exc}")
 

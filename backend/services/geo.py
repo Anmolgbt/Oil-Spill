@@ -6,7 +6,36 @@ Plain trigonometry, no dependencies. Distances are great-circle kilometres.
 from datetime import datetime
 from math import asin, atan2, cos, degrees, radians, sin, sqrt
 
+# IUGG mean Earth radius. Used by every great-circle calculation in the
+# pipeline. services/investigation.py used to carry a second haversine at
+# 6371.0 for notebook fidelity; the two agreed to within 0.2 m over 148 km
+# (1.4 ppm, entirely the radius) and the atan2 and asin forms are
+# mathematically identical, so there is now only this one.
 EARTH_RADIUS_KM = 6371.0088
+
+# FLAT-EARTH APPROXIMATIONS.
+#
+# Three of them, deliberately, because they are not interchangeable and
+# collapsing them would break things that currently work:
+#
+#   KM_PER_DEG_LAT_WGS84 / _km_per_deg_lon()
+#       Used by risk.py and reroute.py, which do planar shapely geometry on
+#       lat/lon and need a conversion consistent with the circles they draw.
+#
+#   KM_PER_DEG_NOTEBOOK
+#       The flat 1/111 the notebook's hindcast used. fleet_pipeline.hindcast_over()
+#       and counterfactual.py BOTH use it, and counterfactual mirrors the
+#       hindcast's arithmetic exactly so that forward-then-backward closes to
+#       0.00 km. Substituting the spherical destination() here leaves a residual
+#       that is pure method mismatch rather than evidence. Do not "fix" it.
+KM_PER_DEG_LAT_WGS84 = 110.574
+KM_PER_DEG_LON_EQUATOR = 111.320
+KM_PER_DEG_NOTEBOOK = 111.0
+
+
+def km_per_deg_lon(lat):
+    """Kilometres per degree of longitude at this latitude (planar helper)."""
+    return KM_PER_DEG_LON_EQUATOR * cos(radians(lat))
 
 
 def haversine_km(lat1, lon1, lat2, lon2):

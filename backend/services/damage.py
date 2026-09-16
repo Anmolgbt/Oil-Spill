@@ -32,8 +32,7 @@ from core.config import (ADVISORY_ELEVATED_SCORE, ADVISORY_URGENT_SCORE,
                          ASSUMED_WIND_DIRECTION_DEG, ASSUMED_WIND_SPEED_MS,
                          DAMAGE_WEIGHT_AREA, DAMAGE_WEIGHT_CONFIDENCE,
                          DAMAGE_WEIGHT_VESSEL_SIZE, WIND_DRIFT_FACTOR)
-
-MS_TO_KMH = 3.6
+from .environment import combine_current_and_wind
 
 # Normalisation ceilings for the priority score. A spill at or above the ceiling
 # scores 100 on that component; they are demo scaling choices, stated here
@@ -48,21 +47,17 @@ def drift_vector():
     of the wind, summed as vectors. Returns speed in km/h and the compass
     bearing the slick moves toward.
     """
-    current_kmh = ASSUMED_CURRENT_SPEED_MS * MS_TO_KMH
-    wind_kmh = ASSUMED_WIND_SPEED_MS * MS_TO_KMH * WIND_DRIFT_FACTOR
-
-    # Compass bearings: north is +y, east is +x.
-    east = (current_kmh * math.sin(math.radians(ASSUMED_CURRENT_DIRECTION_DEG))
-            + wind_kmh * math.sin(math.radians(ASSUMED_WIND_DIRECTION_DEG)))
-    north = (current_kmh * math.cos(math.radians(ASSUMED_CURRENT_DIRECTION_DEG))
-             + wind_kmh * math.cos(math.radians(ASSUMED_WIND_DIRECTION_DEG)))
-
-    speed_kmh = math.hypot(east, north)
-    direction_deg = (math.degrees(math.atan2(east, north)) + 360) % 360
+    # The vector sum lives in services/environment.py so that this assumed
+    # drift and any historical one are computed by identical arithmetic. Two
+    # copies would eventually disagree, and the legacy-vs-environmental
+    # comparison would then be measuring the copy rather than the data.
+    speed_kmh, direction_deg = combine_current_and_wind(
+        ASSUMED_CURRENT_SPEED_MS, ASSUMED_CURRENT_DIRECTION_DEG,
+        ASSUMED_WIND_SPEED_MS, ASSUMED_WIND_DIRECTION_DEG)
 
     return {
-        "speed_kmh": round(speed_kmh, 3),
-        "direction_deg": round(direction_deg, 1),
+        "speed_kmh": speed_kmh,
+        "direction_deg": direction_deg,
         "from_current": {"speed_ms": ASSUMED_CURRENT_SPEED_MS,
                          "direction_deg": ASSUMED_CURRENT_DIRECTION_DEG},
         "from_wind": {"speed_ms": ASSUMED_WIND_SPEED_MS,

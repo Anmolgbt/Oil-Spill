@@ -24,9 +24,11 @@ from shapely.geometry import LineString, Point, Polygon
 from shapely.ops import unary_union
 
 from core.config import RISK_FORECAST_HOURS
-from .geo import haversine_km
+from .geo import KM_PER_DEG_LAT_WGS84, km_per_deg_lon, haversine_km
 
-KM_PER_DEG_LAT = 110.574
+# Shared with reroute.py/risk.py via geo.py so the planar circles these two
+# modules draw and the routes that must clear them use one conversion.
+KM_PER_DEG_LAT = KM_PER_DEG_LAT_WGS84
 KT_TO_KMH = 1.852
 
 # How finely the projected track is sampled when looking for the entry point.
@@ -34,10 +36,6 @@ SAMPLE_MINUTES = 5
 
 # Risk banding on estimated time-to-entry, within the forecast horizon.
 HIGH_RISK_MINUTES = 120
-
-
-def km_per_deg_lon(lat):
-    return 111.320 * cos(radians(lat))
 
 
 def circle_polygon(lat, lon, radius_km, points=48):
