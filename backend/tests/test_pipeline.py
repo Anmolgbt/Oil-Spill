@@ -78,7 +78,13 @@ def test_detour_clears_the_spill_polygons():
         detour = entry["detour"]
         spill = next(sp for sp in scan["spills"]
                      if sp["spill"]["ship_id"] == entry["spill_ship_id"])
-        keep_out = unary_union([p["polygon"] for p in spill_polygons(spill)])
+        # The incident view also carries +12/+24/+48 h forecast envelopes, but
+        # this route covers the fleet-risk horizon recorded on the detour. Test
+        # the same keep-out geometry that the route was generated to avoid.
+        keep_out = unary_union([
+            p["polygon"] for p in spill_polygons(
+                spill, max_hours_ahead=detour["forecast_horizon_hours"])
+        ])
         route = LineString([(w["longitude"], w["latitude"])
                             for w in detour["detour_waypoints"]])
 

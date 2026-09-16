@@ -201,6 +201,7 @@ export interface Detour {
   suggested_heading_deg: number;
   heading_change_deg: number;
   safety_buffer_km: number;
+  forecast_horizon_hours: number;
   already_inside_zone: boolean;
   detour_distance_km: number;
   direct_distance_km: number;

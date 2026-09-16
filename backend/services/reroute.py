@@ -220,6 +220,7 @@ def suggest_detour(ship, polygons, horizon_hours, buffer_km=RISK_SAFETY_BUFFER_K
         "suggested_heading_deg": round(suggested_heading, 1),
         "heading_change_deg": round(heading_change, 1),
         "safety_buffer_km": buffer_km,
+        "forecast_horizon_hours": horizon_hours,
         "already_inside_zone": inside,
         "detour_distance_km": round(_route_length_km(route_xy), 2),
         "direct_distance_km": round(hypot(end[0] - start[0], end[1] - start[1]), 2),
