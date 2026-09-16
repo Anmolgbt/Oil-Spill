@@ -144,7 +144,8 @@ def _clears(route_xy, centre, keep_out):
     return not line.intersects(keep_out)
 
 
-def suggest_detour(ship, polygons, horizon_hours, buffer_km=RISK_SAFETY_BUFFER_KM):
+def suggest_detour(ship, polygons, horizon_hours, buffer_km=RISK_SAFETY_BUFFER_KM,
+                   exit_side=0):
     """
     A route around the buffered spill polygons for one at-risk vessel, plus the
     resulting heading change. Returns None if there is no obstacle to route
@@ -174,7 +175,7 @@ def suggest_detour(ship, polygons, horizon_hours, buffer_km=RISK_SAFETY_BUFFER_K
     inside = keep_out.covers(Point(lon, lat))
     within_routing_circle = hypot(*start) <= radius
     if within_routing_circle:
-        route_xy, note = _exit_route(start, end, radius), (
+        route_xy, note = _exit_route(start, end, radius, exit_side), (
             "Vessel is already inside the affected area — this is the shortest "
             "way out, so its first leg necessarily lies inside the zone."
         )
@@ -232,17 +233,22 @@ def suggest_detour(ship, polygons, horizon_hours, buffer_km=RISK_SAFETY_BUFFER_K
     }
 
 
-def _exit_route(start_xy, end_xy, radius_km):
+def _exit_route(start_xy, end_xy, radius_km, exit_side=0):
     """
     Shortest way out for a vessel already inside the zone: straight out along
     its own radius to the boundary, then on toward where it was going.
     """
     distance = hypot(*start_xy)
+    # When nearby vessels need an exit at the same time, fan them to opposite
+    # sides instead of drawing routes on top of one another. Negative is map
+    # left/west, positive is map right/east; zero keeps the shortest radial exit.
+    exit_angle = (pi if exit_side < 0 else 0.0) if exit_side else atan2(start_xy[1], start_xy[0])
     if distance < 1e-9:                  # dead centre: pick any direction
-        exit_xy = (radius_km * ARC_CLEARANCE, 0.0)
+        exit_xy = (radius_km * ARC_CLEARANCE * cos(exit_angle),
+                   radius_km * ARC_CLEARANCE * sin(exit_angle))
     else:
-        scale = (radius_km * ARC_CLEARANCE) / distance
-        exit_xy = (start_xy[0] * scale, start_xy[1] * scale)
+        exit_xy = (radius_km * ARC_CLEARANCE * cos(exit_angle),
+                   radius_km * ARC_CLEARANCE * sin(exit_angle))
 
     # Stop outside the zone; a direct rejoin could cross it again.
     return [start_xy, exit_xy]

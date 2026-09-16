@@ -33,6 +33,20 @@ def test_inside_route_exits_without_crossing_back():
     assert endpoint["longitude"] < -0.02
 
 
+def test_nearby_inside_routes_can_fan_to_opposite_sides():
+    polygon = circle_polygon(0, 0, 5)
+    left = suggest_detour(ship(lon=-0.02), [{"polygon": polygon}], 2, exit_side=-1)
+    right = suggest_detour(ship(lon=-0.02), [{"polygon": polygon}], 2, exit_side=1)
+    left_end = left["detour_waypoints"][-1]
+    right_end = right["detour_waypoints"][-1]
+
+    assert left["already_inside_zone"] and right["already_inside_zone"]
+    assert left_end["longitude"] < 0
+    assert right_end["longitude"] > 0
+    assert not polygon.covers(Point(left_end["longitude"], left_end["latitude"]))
+    assert not polygon.covers(Point(right_end["longitude"], right_end["latitude"]))
+
+
 def test_destination_at_obstacle_center():
     from services.geo import destination
     vessel = ship()

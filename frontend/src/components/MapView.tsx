@@ -208,6 +208,14 @@ export function MapView({view, envelope, detected, shownSpill, spills = [], onSe
       {/* FORWARD RISK: selected vessel's projected track and, if it
           intersects the spill, the simulated detour. Separate concept
           from attribution — this is forward-looking, not historic. */}
+      {showRisk && Object.values(riskByShipId).map((risk) => {
+        if (!risk.detour || (risk.ship_id === selected?.id && showDetour)) return null;
+        return <Polyline key={`prepared-detour-${risk.ship_id}`}
+          positions={risk.detour.detour_waypoints.map((p) => [p.latitude, p.longitude] as [number, number])}
+          pathOptions={{color: C.detour, weight: 2, dashArray: "5 5", opacity: .58}}>
+          <Tooltip>{risk.name} · SIMULATED REROUTE<br />Prepared route · select vessel for details</Tooltip>
+        </Polyline>;
+      })}
       {showRisk && selectedRisk && selected && (
         <>
           <Polyline
