@@ -3,6 +3,7 @@
 # Versions are floors, not exact pins, so the project installs on Python 3.10
 # through 3.13. The one exception is scikit-learn — see the note below.
 
+--extra-index-url https://download.pytorch.org/whl/cpu
 fastapi>=0.115
 uvicorn[standard]>=0.30
 pydantic>=2.9
