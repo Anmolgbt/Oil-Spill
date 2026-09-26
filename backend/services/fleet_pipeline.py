@@ -816,6 +816,7 @@ def _combined_risk(spills, ships):
     }
 
 
+@lru_cache(maxsize=8)
 def run_fleet_scan(snapshot_id=None):
     """Full monitoring scan over one satellite pass."""
     started = time.perf_counter()
