@@ -34,15 +34,15 @@ def test_the_top_candidate_changes_on_the_first_detection(scan):
     assert change["available"] is True
     assert change["top_changes"] is True
     assert change["legacy_top"] == "MR CANOPUS"
-    assert change["environmental_top"] == "NISALAH"
+    assert change["environmental_top"] == "ACHILLEAS"
 
     by_name = {r["name"]: r for r in change["rows"]}
     assert by_name["MR CANOPUS"]["legacy_rank"] == 1
-    assert by_name["MR CANOPUS"]["environmental_rank"] == 3
-    assert by_name["NISALAH"]["legacy_rank"] == 2
-    assert by_name["NISALAH"]["environmental_rank"] == 1
+    assert by_name["MR CANOPUS"]["environmental_rank"] == 2
+    assert by_name["ACHILLEAS"]["legacy_rank"] == 4
+    assert by_name["ACHILLEAS"]["environmental_rank"] == 1
     # The largest single move, and the one worth noticing.
-    assert by_name["ACHILLEAS"]["rank_delta"] == 4
+    assert by_name["GRAND DOLPHIN"]["rank_delta"] == 5
 
 
 def test_the_second_detection_is_steady(scan):

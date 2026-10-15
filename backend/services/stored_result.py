@@ -62,15 +62,15 @@ def _artifact(name):
 def model_artifacts():
     """The trained files shipped in the repo, and whether they back live inference."""
     return {
-        "cnn": _artifact("oilspill_cnn.pth"),
-        "ais_isolation_forest": _artifact("ais_isolation_forest.pkl"),
-        "ais_scaler": _artifact("ais_scaler.pkl"),
+        "cnn": _artifact("oilspill_cnn_best.pth"),
+        "cnn_config": _artifact("cnn_config.json"),
+        "ais_anomaly_model": _artifact("ais_anomaly_model.joblib"),
         "live_inference": True,
         "note": ("These weights are loaded and run for real by /fleet/scan, "
                  "/ai/cnn/predict, /ai/ais/predict and /ai/investigate. This "
                  "endpoint sits under /ai-result, which serves the stored case "
-                 "from the handoff notebook — that stored payload is a recorded "
-                 "result, but the artifacts described here are the live ones."),
+                 "(regenerated from these same models) — that stored payload is a "
+                 "recorded result, but the artifacts described here are the live ones."),
     }
 
 
@@ -202,7 +202,8 @@ def get_investigation():
 
         "provenance": {
             "source": "ai_result_stored",
-            "detail": "Completed AI output from the Colab handoff, served verbatim.",
+            "detail": ("Completed AI output regenerated from the installed models "
+                       "(scripts/regenerate_stored_result.py), served verbatim."),
             "live_inference": False,
         },
     }

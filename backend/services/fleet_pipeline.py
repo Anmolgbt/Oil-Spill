@@ -416,8 +416,11 @@ def score_fleet_behaviour(ships):
             }
             continue
 
+        # LAT/LON are required: the model cross-checks each reported speed against
+        # the speed the positions imply, so it cannot score a track without them.
         records = [{"MMSI": mmsi, "BaseDateTime": p["time"],
-                    "SOG": p["speed_kt"], "COG": p["course_deg"]} for p in track]
+                    "SOG": p["speed_kt"], "COG": p["course_deg"],
+                    "LAT": p["lat"], "LON": p["lon"]} for p in track]
         try:
             anomaly = predict_track(records, mmsi=mmsi)
         except ValueError as exc:

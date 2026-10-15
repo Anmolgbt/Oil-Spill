@@ -130,10 +130,10 @@ result as plainly as a corroborating one — consistency is amber, ruling a vess
 out is green, because "not consistent" is a successful test.
 
 **It is independent of the ranking, and it does disagree with it.** On the
-demo's first detection the ranking puts MR CANOPUS top at 81.87, and its oil
+demo's first detection the ranking puts MR CANOPUS top at 86.44, and its oil
 *would* have reached the slick — 2.88 km, inside the 6.00 km that drift could
-have carried it. But third-ranked GRAND DOLPHIN (78.91) misses by 9.72 km and is
-ruled out, while sixth-ranked ACHILLEAS (70.38) lands 3.82 km away and is not.
+have carried it. But third-ranked VESSEL 219025316 (72.71) misses by 9.15 km and is
+ruled out, while fourth-ranked ACHILLEAS (68.79) lands 3.82 km away and is not.
 Rank order and consistency are answering different questions, and the interface
 shows both rather than reconciling them.
 
@@ -186,7 +186,7 @@ Each detection then gets one of three outcomes:
 
 **The shipped demo produces the last two.** On the second detection all five
 candidates are robustly ruled out by their own counterfactuals while the ranking
-still shows a leader at 70.54/100 — so the system states that nobody is
+still shows a leader at 50.17/100 — so the system states that nobody is
 supported, keeps the ranked list visible with its scores, and explains why that
 number is not support. Declining to name a vessel is a statement about evidence,
 never a finding that any vessel is innocent.
@@ -257,50 +257,59 @@ footnote to the first.
 
 ## Models
 
-### Oil detection — `artifacts/oilspill_cnn.pth`
+### Oil detection — `artifacts/oilspill_cnn_best.pth` + `cnn_config.json`
 
-Custom CNN, **binary classifier**, 421,570 parameters.
-
-```
-Conv(3→32) → ReLU → MaxPool → Conv(32→64) → ReLU → MaxPool
-Conv(64→128) → ReLU → MaxPool → Conv(128→256) → ReLU → AdaptiveAvgPool(1×1)
-Flatten → Linear(256→128) → ReLU → Dropout(0.4) → Linear(128→2)
-```
+Custom CNN, **binary classifier**, 1,206,370 parameters. Four blocks of
+`Conv-BatchNorm-ReLU` ×2 + `MaxPool` (32→64→128→256 channels), global average
+pooling, a `Dropout(0.30)` MLP head.
 
 Preprocessing: `Resize(224×224)` → `Grayscale(3)` → `ToTensor` →
-`Normalize(mean=[0.485,0.456,0.406], std=[0.229,0.224,0.225])`.
-Inference is `softmax` → `argmax`, confidence = probability of the predicted class.
+`Normalize(0.5, 0.5)` (not the ImageNet values).
+Inference is `softmax(logits / 1.0286)`, and a tile is **OIL SPILL when its calibrated
+oil probability is ≥ 0.57** — the temperature and the threshold were both fitted on
+the validation split. Confidence is the probability of the verdict returned.
 
-Test set — 555 Sentinel-1 SAR images:
+Evaluated on a **scene-grouped** split, so no satellite scene appears in more than
+one of train / validation / test. Test set — 574 Sentinel-1 tiles from 451 scenes the
+model never saw:
 
 | Accuracy | Precision | Recall | F1 | ROC-AUC |
 |---|---|---|---|---|
-| 89.91% | 97.78% | 71.35% | 82.50% | 93.20% |
+| 96.34% | 94.33% | 94.82% | 94.57% | 99.33% |
 
-Confusion matrix: TN 367 · FP 3 · FN 53 · TP 132.
+Confusion matrix: TN 370 · FP 11 · FN 10 · TP 183. 95% intervals (resampling whole
+scenes): accuracy 94.6–97.9%, recall 90.7–98.1%.
 
-High precision, moderate recall — it rarely cries wolf, but misses roughly one
-spill in four. For monitoring, a missed spill costs more than a false alarm, so
-this is the trade-off to be aware of.
+Roughly one alarm in 18 is false and one spill in 19 is missed; "about 95%" is the
+defensible claim. **The demo is not a test:** its tiles come from the same public
+dataset the model was trained on, so its detections are not a held-out measurement.
+Replaying the notebook's test split through the backend reproduces that confusion
+matrix exactly.
 
-CPU inference: ~5 ms per tile.
+CPU inference: ~65 ms per tile on a single core, measured — about 2.5× the previous, smaller model (26 ms on the same machine). A 12-vessel scan adds under a second of model time.
 
-### AIS behaviour — `artifacts/ais_isolation_forest.pkl`
+### AIS behaviour — `artifacts/ais_anomaly_model.joblib`
 
-`IsolationForest(n_estimators=200, contamination=0.02, random_state=42)` with a
-`StandardScaler` fitted over 52,596 AIS records.
+`IsolationForest(n_estimators=300, contamination=0.02, random_state=42)` with a
+`StandardScaler`, trained on the 52,943-record reference corpus after cleaning.
 
-Features, **in this exact order** (pinned by the scaler's `feature_names_in_`):
+AIS "not available" codes (`SOG 102.3`, `COG 360`) are **cleared and recovered from the
+position track** — the previous model scored them as the most extreme behaviour in the
+corpus. Features are location independent and computed within a track segment:
 
 ```
-["SOG", "speed_change", "COG", "course_change", "time_gap_minutes"]
+["sog", "accel_kn_per_min", "turn_rate_deg_per_min", "speed_mismatch_kn"]
 ```
 
-Scoring is point-level, then aggregated per vessel:
-`anomaly_score = 100 × (max_raw − decision_function) / (max_raw − min_raw)`, and
-`behaviour_score` is that vessel's maximum. The normalisation is **dataset-wide**,
-which is why `backend/data/ais_reference/ais_dataset.csv` must ship with the app —
-without it a single vessel cannot be placed on the same 0–100 scale.
+Scoring is point-level, then aggregated per vessel: `anomaly_score` is calibrated 0–100
+(0 = training median, 100 = training 99.5th percentile — a **fixed** calibration stored
+with the model), and `behaviour_score` is that vessel's maximum. Because the score is
+clipped and the aggregate is a maximum, several vessels can tie at 100. Records need
+`LAT`/`LON`, since reported speed is cross-checked against the speed the positions imply.
+
+It is unsupervised and was checked only by injecting known unusual behaviour into held-out
+vessels (ROC-AUC 0.993) — not against real violations. See
+[`docs/MODELS.md`](docs/MODELS.md).
 
 ---
 
@@ -373,13 +382,14 @@ Interactive docs at http://localhost:8000/docs.
 │   ├── stages.ts              the five investigation stages
 │   ├── ui.tsx                 Card, Badge, ScoreBar
 │   └── mapColours.ts          overlay colours, named by role
-├── handoff/                   the Colab notebook and delivered artifacts, untouched
+├── handoff/                   training notebooks + delivered artifacts (cnn/, ais/), and previous/ — untouched
 ├── dataset/                   LADOS reference paper
 └── docs/                      ARCHITECTURE.md, MODELS.md, DEMO.md
 ```
 
-The repo is ~17 MB: the AIS corpus (5.3 MB), model weights (3 MB) and the handoff
-folder (4.9 MB) are committed because the app cannot run without them.
+The repo is ~37 MB without `node_modules`: the AIS corpus (5.3 MB) and model artifacts
+(7.1 MB) are committed because the app cannot run without them; the handoff folder
+(14 MB) is the provenance record and is not read at runtime.
 
 ---
 
@@ -504,12 +514,13 @@ vessel handling or COLREGs.
 for response order, and excludes shoreline proximity, habitat sensitivity, oil
 volume and cost. No response assets, crews or arrival times are modelled.
 
-**`course_change` is not circular** in the saved AIS model: 359° → 1° is recorded
-as 358°, not 2°. This is reproduced deliberately, because the saved scaler was
-fitted on those values — correcting it requires retraining. See
+**The CNN's tiles are its own training data.** The demo's satellite tiles come from the
+public dataset the CNN was trained on, so confident demo detections are not accuracy
+evidence — the 574-tile scene-grouped test is. The AIS model is unsupervised and has no
+ground truth; "anomalous" means unusual, not wrong. See
 [`handoff/README.md`](handoff/README.md).
 
-**Test coverage is behavioural, not exhaustive.** 73 backend tests
+**Test coverage is behavioural, not exhaustive.** 88 backend tests
 (`backend/tests/`) pin the properties that matter — counterfactual inverse
 closure to 0.00 km within 10 m, the seeded assignment, the attribution
 arithmetic, `UNAVAILABLE` never grading as `LOW`, both detection outcomes — plus

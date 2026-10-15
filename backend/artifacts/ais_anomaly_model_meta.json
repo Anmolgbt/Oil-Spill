@@ -1,0 +1,17 @@
+{
+  "features": [
+    "sog",
+    "accel_kn_per_min",
+    "turn_rate_deg_per_min",
+    "speed_mismatch_kn"
+  ],
+  "n_training_rows": 52049,
+  "contamination": 0.02,
+  "n_estimators": 300,
+  "sklearn_version": "1.6.1",
+  "calibration": {
+    "lo": -0.2553293195210235,
+    "hi": 0.09406024221129687
+  },
+  "score_definition": "0 = training-median unusualness, 100 = training 99.5th percentile (clipped)"
+}

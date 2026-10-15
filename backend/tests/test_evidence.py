@@ -24,7 +24,7 @@ def t3():
 def test_the_weak_detection_declines_to_name_anyone(t3):
     """
     Every candidate on this detection is robustly not-consistent, while the
-    ranking still shows a leader at 70.54/100. The system must say so.
+    ranking still shows a leader at 50.17/100. The system must say so.
     """
     assessment = t3["spills"][1]["evidence"]["assessment"]
 
@@ -34,7 +34,7 @@ def test_the_weak_detection_declines_to_name_anyone(t3):
     # The score is not hidden — it is explained.
     assert assessment["leader"]["name"] == "GRAND DOLPHIN"
     assert assessment["leader"]["counterfactual_consistent"] is False
-    assert any("70.54" in r for r in assessment["reasons"])
+    assert any("50.17" in r for r in assessment["reasons"])
     # And declining to name is about evidence, not innocence.
     assert "innocent" in assessment["means"]
 
@@ -49,7 +49,7 @@ def test_the_unstable_detection_is_not_flattened_into_supported(t3):
 
     assert assessment["outcome"] == "LEADING_CANDIDATE_UNSTABLE"
     assert assessment["consistent_count"] == 3
-    assert any("MR CANOPUS" in r and "NISALAH" in r for r in assessment["reasons"]), \
+    assert any("MR CANOPUS" in r and "ACHILLEAS" in r for r in assessment["reasons"]), \
         "the rank flip must be one of the stated reasons"
     assert any("0.06 km" in r for r in assessment["reasons"]), \
         "the thin margin must be one of the stated reasons"
@@ -126,6 +126,6 @@ def test_the_evidence_layer_does_not_touch_the_ranking(t3):
     describing itself."""
     assert [c["rank"] for c in t3["spills"][0]["candidates"]] == list(range(1, 12))
     assert t3["spills"][0]["candidates"][0]["name"] == "MR CANOPUS"
-    assert t3["spills"][0]["candidates"][0]["final_suspect_score"] == pytest.approx(81.87, abs=0.01)
+    assert t3["spills"][0]["candidates"][0]["final_suspect_score"] == pytest.approx(86.44, abs=0.01)
     assert t3["spills"][0]["affected_area"]["radius_km"] == 5.58
     assert t3["spills"][1]["ais"]["funnel"]["within_radius"] == 5

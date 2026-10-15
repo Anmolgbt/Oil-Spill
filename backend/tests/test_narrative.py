@@ -42,7 +42,7 @@ def test_the_top_vessel_on_a_weak_detection_is_not_accused(t3):
     assert "does not say it was the source" in opening["text"]
     assert "no vessel's oil could have reached" in opening["text"]
     # The score is still stated — explained, not hidden.
-    assert "70.54" in opening["text"]
+    assert "50.17" in opening["text"]
 
 
 def test_the_unstable_leader_is_framed_as_a_starting_point(t3):

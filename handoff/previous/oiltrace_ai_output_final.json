@@ -1,0 +1,78 @@
+{
+    "system": "OILTRACE",
+    "version": "1.0",
+    "detection": {
+        "prediction": "OIL SPILL",
+        "class": 1,
+        "confidence": 0.805
+    },
+    "spill": {
+        "latitude": 28.57,
+        "longitude": -94.8
+    },
+    "hindcast": {
+        "latitude": 28.79933,
+        "longitude": -95.06113,
+        "hours_backward": 24
+    },
+    "ais": {
+        "candidate_count": 2,
+        "top_mmsi": 367124980,
+        "minimum_distance_km": 22.82,
+        "trajectory_status": "Approaching source",
+        "trajectory_score": 52.04,
+        "behaviour_score": 100.0,
+        "final_suspect_score": 67.36
+    },
+    "forecast": [
+        {
+            "hours_ahead": 6,
+            "latitude": 28.515946,
+            "longitude": -94.8
+        },
+        {
+            "hours_ahead": 12,
+            "latitude": 28.461892,
+            "longitude": -94.8
+        },
+        {
+            "hours_ahead": 24,
+            "latitude": 28.353784,
+            "longitude": -94.8
+        },
+        {
+            "hours_ahead": 48,
+            "latitude": 28.137568,
+            "longitude": -94.8
+        }
+    ],
+    "interpretation": {
+        "vessel_causation_proven": false,
+        "forecast_type": "kinematic_projection",
+        "requires_environmental_drift_data": true
+    },
+    "cnn_validation": {
+        "test_samples": 555,
+        "accuracy": 0.8991,
+        "precision": 0.9778,
+        "recall": 0.7135,
+        "f1_score": 0.825,
+        "roc_auc": 0.932,
+        "confusion_matrix": {
+            "true_negative": 367,
+            "false_positive": 3,
+            "false_negative": 53,
+            "true_positive": 132
+        },
+        "classes": {
+            "0": "NO OIL SPILL",
+            "1": "OIL SPILL"
+        }
+    },
+    "model_status": {
+        "cnn_validated": true,
+        "test_samples": 555,
+        "roc_auc": 0.932,
+        "f1_score": 0.825
+    }
+}

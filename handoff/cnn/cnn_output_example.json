@@ -1,0 +1,141 @@
+{
+  "system": "OILTRACE AI",
+  "module": "CNN",
+  "model_config": {
+    "image_size": 224,
+    "decision_threshold": 0.57,
+    "temperature": 1.0285992622375488,
+    "class_map": {
+      "0": "NO OIL SPILL",
+      "1": "OIL SPILL"
+    }
+  },
+  "evaluation": {
+    "accuracy": 0.9634146341463414,
+    "precision": 0.9432989690721649,
+    "recall": 0.9481865284974094,
+    "roc_auc": 0.9933499245236832,
+    "ci95_scene_bootstrap": {
+      "accuracy": [
+        0.9459413650939075,
+        0.9790976935968074
+      ],
+      "precision": [
+        0.9050557564798072,
+        0.974242993317101
+      ],
+      "recall": [
+        0.9065848214285714,
+        0.9806786510590859
+      ],
+      "roc_auc": [
+        0.9868712895161558,
+        0.9976824982941198
+      ]
+    },
+    "split": "scene-grouped",
+    "n_test": 574
+  },
+  "tile_example": {
+    "oil-like tile": {
+      "result": {
+        "oil_probability": 1.0,
+        "prediction": "OIL SPILL",
+        "class": 1,
+        "confidence": "High",
+        "tta_std": 0.0,
+        "decision_threshold": 0.57,
+        "lookalike_analysis": {
+          "oil_like": 1.0,
+          "not_oil_like": 0.0,
+          "breakdown_available": false,
+          "note": "Binary model: cannot split the non-oil share into biofilm / low-wind / other. Any such split shown in the UI must come from another component and be labelled demo."
+        },
+        "warnings": []
+      },
+      "geometry": {
+        "area_km2": 1.0807,
+        "pixel_count": 10807,
+        "coverage_fraction": 0.0675,
+        "length_km": 3.745,
+        "width_km": 1.307,
+        "orientation_deg": 99.2,
+        "n_components": 3
+      },
+      "true_label": 1
+    },
+    "clean-sea tile": {
+      "result": {
+        "oil_probability": 0.0,
+        "prediction": "NO OIL SPILL",
+        "class": 0,
+        "confidence": "High",
+        "tta_std": 0.0,
+        "decision_threshold": 0.57,
+        "lookalike_analysis": {
+          "oil_like": 0.0,
+          "not_oil_like": 1.0,
+          "breakdown_available": false,
+          "note": "Binary model: cannot split the non-oil share into biofilm / low-wind / other. Any such split shown in the UI must come from another component and be labelled demo."
+        },
+        "warnings": []
+      },
+      "geometry": {
+        "area_km2": 0.0403,
+        "pixel_count": 403,
+        "coverage_fraction": 0.0025,
+        "length_km": 0.182,
+        "width_km": 0.131,
+        "orientation_deg": 97.9,
+        "n_components": 3
+      },
+      "true_label": 0
+    }
+  },
+  "scene_example": {
+    "oil_probability": 0.9998,
+    "prediction": "OIL SPILL",
+    "class": 1,
+    "confidence": "High",
+    "tta_std": 0.0,
+    "decision_threshold": 0.57,
+    "lookalike_analysis": {
+      "oil_like": 0.9998,
+      "not_oil_like": 0.0002,
+      "breakdown_available": false,
+      "note": "Binary model: cannot split the non-oil share into biofilm / low-wind / other. Any such split shown in the UI must come from another component and be labelled demo."
+    },
+    "warnings": [],
+    "scene_decision_rule": "scene P(oil) = highest tile probability; in very large scenes this rule raises the false-alarm rate - check n_positive_tiles",
+    "n_tiles": 25,
+    "n_positive_tiles": 7,
+    "best_tile": {
+      "box": [
+        400,
+        0,
+        800,
+        400
+      ],
+      "oil_probability": 0.9998,
+      "tta_std": 0.0,
+      "warnings": []
+    },
+    "image_size_px": [
+      1200,
+      1200
+    ],
+    "geometry": {
+      "area_km2": 0.9103,
+      "pixel_count": 9103,
+      "coverage_fraction": 0.0063,
+      "length_km": 2.206,
+      "width_km": 0.412,
+      "orientation_deg": 118.0,
+      "n_components": 5
+    },
+    "pixel_size_m": 10.0,
+    "geometry_assumption": "Approximate (Grad-CAM-derived mask). pixel_size_m must match the scene.",
+    "disclaimer": "Image-patch classifier trained on Sentinel-1 tiles. Dark SAR features are not automatically oil; mask and geometry are approximate (Grad-CAM derived), not a trained segmentation."
+  },
+  "disclaimer": "Image-patch classifier trained on Sentinel-1 tiles. Dark SAR features are not automatically oil; mask and geometry are approximate (Grad-CAM derived), not a trained segmentation."
+}

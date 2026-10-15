@@ -1,0 +1,40 @@
+{
+  "model": "OilSpillCNN",
+  "weights_file": "oilspill_cnn_best.pth",
+  "image_size": 224,
+  "native_tile_px": 400,
+  "normalize_mean": 0.5,
+  "normalize_std": 0.5,
+  "input": "grayscale replicated to 3 channels",
+  "dropout": 0.3,
+  "temperature": 1.0285992622375488,
+  "decision_threshold": 0.57,
+  "threshold_mode": "max_f1",
+  "class_map": {
+    "0": "NO OIL SPILL",
+    "1": "OIL SPILL"
+  },
+  "positive_class": 1,
+  "best_epoch": 50,
+  "evaluation": {
+    "split": "scene-grouped (StratifiedGroupKFold), 80/10/10",
+    "n_test_tiles": 574,
+    "n_test_scenes": 451,
+    "smoke_test": false,
+    "fast_cpu_run": false
+  },
+  "provenance": {
+    "data": "Sentinel-1 SAR 400x400 tiles (public repo Saisamarth21/Oil-Spill-Detection-... 'SAR Image Dataset')",
+    "label_meaning": "folder 1 = oil spill, folder 0 = no oil (from the dataset's '_cls_N' naming; confirm with the data owner)",
+    "created_utc": "2026-10-14T12:02:47+00:00",
+    "torch": "2.11.0+cu130",
+    "torchvision": "0.26.0+cu130",
+    "seed": 42
+  },
+  "limitations": [
+    "binary classifier, not segmentation",
+    "mask/geometry derived from Grad-CAM (approximate)",
+    "no look-alike breakdown",
+    "trained on one dataset; unseen sensors/regions may behave differently"
+  ]
+}

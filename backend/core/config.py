@@ -15,13 +15,14 @@ DATA_DIR = BACKEND_DIR / "data"
 # Served to the browser at /simulation-images.
 SIMULATION_DIR = DATA_DIR / "simulation"
 
-# Completed AI result from the Colab handoff, used as the dashboard's fallback
+# Completed AI result (regenerated from the installed models by
+# scripts/regenerate_stored_result.py), used as the dashboard's fallback
 # when a live scan is unavailable. Its samples/ folder is served at /ai-images.
 AI_OUTPUT_DIR = DATA_DIR / "ai_output"
 
-# AIS corpus the Isolation Forest was trained and scored on. Required at runtime:
-# the notebook normalises anomaly scores against dataset-wide min/max, so a single
-# vessel cannot be scored on the same 0-100 scale without it.
+# AIS corpus the Isolation Forest was trained on. /ai/investigate searches it for
+# candidate vessels. Scoring a single track does NOT need it: behaviour scores use a
+# fixed calibration stored with the model.
 AIS_REFERENCE_FILE = DATA_DIR / "ais_reference" / "ais_dataset.csv"
 
 # Trained model files.

@@ -81,15 +81,17 @@ age.
 
 Click **T3**. Red banner. Two vessels flip red:
 
-- **NISALAH** — 97.75%
-- **GRAND DOLPHIN** — 54.35%
+- **NISALAH** — 99.99%
+- **GRAND DOLPHIN** — 98.48%
 
 (Unchanged from the six-vessel build: the same two vessels get the same two oil
 tiles under the same seed.)
 
-Both are real classifier outputs on real SAR tiles. Point at the 54% one: the
-model is genuinely uncertain there, and the interface shows that rather than
-rounding it into a confident answer.
+Both are real classifier outputs on real SAR tiles, and both are confident. Say
+plainly what that does and does not mean: these tiles come from the dataset the
+model was trained on, so this shows the pipeline working end to end - it is not
+evidence the detector is 99% accurate. The held-out figure is under *Questions you
+should expect*.
 
 Note what has *not* appeared: no source, no suspects, no forecast. A detection is
 a fact; everything else is an inference, and the interface will not assert them
@@ -126,13 +128,13 @@ honesty point in the demo — do not skip it.
 
 ## 5. Why this vessel? (60 s)
 
-Scroll to **WHY THIS VESSEL?** and click **NISALAH**:
+Scroll to **WHY THIS VESSEL?** and click **MR CANOPUS** (the top-ranked candidate):
 
 ```
-PROXIMITY  × 0.40   87.20   contributes 34.88  ·  closest 2.14 km
-TRAJECTORY × 0.30   71.25   contributes 21.38  ·  Approaching source
-BEHAVIOUR  × 0.30   79.30   contributes 23.79  ·  Isolation Forest flagged 2 AIS fixes
-87.20 × 0.40 + 71.25 × 0.30 + 79.30 × 0.30 = 80.04
+PROXIMITY  × 0.40   88.37   contributes 35.35  ·  closest 1.95 km
+TRAJECTORY × 0.30   72.84   contributes 21.85  ·  Approaching source
+BEHAVIOUR  × 0.30   97.47   contributes 29.24  ·  Isolation Forest flagged 1 AIS fix
+88.37 × 0.40 + 72.84 × 0.30 + 97.47 × 0.30 = 86.44
 ```
 
 The behaviour term is the Isolation Forest's own verdict on that vessel's real
@@ -144,30 +146,31 @@ drawn as a normal empty bar. If a term had come back with no verdict at all it
 would be hatched and labelled instead. The interface does not let "no answer"
 look like "zero".
 
-If asked why the top score is only ~82 when it used to be ~86: the search radius
-now comes from the drift envelope rather than a flat 50 km, and proximity is
-`100 × (1 − distance / radius)`. A 50 km denominator over a 21 km patch pushed
-every vessel into the top of the range; the derived radius spreads them out.
-Same arithmetic, an honest denominator.
+If asked why these scores differ from earlier recordings of this demo: the behaviour
+model was retrained. AIS "not available" codes (102.3 knots, course 360) no longer
+count as behaviour, and the 0-100 scale is now a fixed calibration. Only the
+behaviour term moves; proximity and trajectory are the same arithmetic. Behaviour is
+a vessel's *maximum* calibrated score, so a few vessels sit at or near 100.
 
 ## 6. The strongest moment: test it (90 s)
 
-The ranking's **#1 is MR CANOPUS at 81.9**, with NISALAH second at 80.0 and
-GRAND DOLPHIN third at 78.9 — three vessels within three points. The ranking
-alone cannot separate them. So test them.
+The ranking's **#1 is MR CANOPUS at 86.4**, with NISALAH second at 73.5 and
+VESSEL 219025316 third at 72.7. A clear leader - but the ranking only says who was
+nearby and behaving oddly, not whether that vessel's oil could have reached the
+slick. So test them.
 
 Click **WHAT IF … CAUSED THE SPILL?** on each:
 
 | Ranked | Vessel | Score | Counterfactual |
 |---|---|---|---|
-| #1 | MR CANOPUS | 81.9 | **2.88 km — CONSISTENT** |
-| #2 | NISALAH | 80.0 | **4.37 km — CONSISTENT** |
-| #3 | GRAND DOLPHIN | 78.9 | 9.72 km — not consistent |
-| #6 | **ACHILLEAS** | 70.4 | **3.82 km — CONSISTENT** |
+| #1 | MR CANOPUS | 86.4 | **2.88 km — CONSISTENT** |
+| #2 | NISALAH | 73.5 | **4.37 km — CONSISTENT** |
+| #3 | VESSEL 219025316 | 72.7 | 9.15 km — not consistent |
+| #4 | **ACHILLEAS** | 68.8 | **3.82 km — CONSISTENT** |
 
 **Two things to dwell on.**
 
-First, the third-ranked vessel is ruled out while the **sixth-ranked one is not**.
+First, the third-ranked vessel is ruled out while the **fourth-ranked one is not**.
 The ranking asks *was it nearby and behaving oddly?*; the counterfactual asks
 *would its oil actually have ended up where the oil is?* Two different questions,
 and an instrument that only ever agreed with itself would not be worth much.
@@ -178,12 +181,12 @@ three.
 
 Then select **GRAND DOLPHIN's** spill in RESPONSE PRIORITY. The banner above the
 ranking reads **NO STRONG CANDIDATE — 0 of 5 candidates consistent with the
-observation**, and explains that GRAND DOLPHIN's 70.54 measures proximity,
+observation**, and explains that GRAND DOLPHIN's 50.17 measures proximity,
 trajectory and behaviour but does not test whether its oil would have reached
 the slick — and that here that test fails for all five.
 
 The ranked list stays below it with its scores intact, so a judge can see the
-70.54 *and* see why it is not support. The closing line is the one to read out:
+50.17 *and* see why it is not support. The closing line is the one to read out:
 *that is a statement about the evidence, NOT a finding that any vessel is
 innocent.*
 
@@ -207,7 +210,7 @@ the shipped one. Same verdict, completely different confidence. Say it plainly:
 **The DRIFT ASSUMPTION strip.** The system carries three drift vectors and they
 disagree: the estimated source moves **4.56 km**, the forecast horizons up to
 **18.98 km**, and re-ranking the same fleet against the environment-aware source
-**puts NISALAH first instead of MR CANOPUS**. If someone asks whether that is
+**puts ACHILLEAS first instead of MR CANOPUS**. If someone asks whether that is
 the environmental data doing something — no. **No environmental dataset is
 loaded.** It is three constants disagreeing with each other, and the panel says
 so twice.
@@ -269,9 +272,16 @@ incriminating tests would be a case for the prosecution, not an instrument.
 segmentation, which is a different model we have not trained. We show the drift
 envelope and label it as such.
 
-**"Why is recall only 71%?"** It misses about one spill in four, while almost
-never raising a false alarm. For monitoring that trade-off is the wrong way
-round, and lowering the threshold is the obvious next step.
+**"How accurate is the detector?"** On 574 tiles from 451 satellite scenes it never saw:
+96.3% accuracy, 94.3% precision, 94.8% recall, ROC-AUC 0.993. Roughly one alarm in 18 is
+false and one spill in 19 is missed. Say "about 95%" rather than "96.3%": the 95% interval
+on recall alone is 90.7-98.1%. The test split is grouped by scene, so no scene that trained
+the model is in it.
+
+**"Is the demo itself proof that it works?"** No, and say so first. The demo's tiles come
+from the same public dataset the model was trained on - most of the bundled ones were in
+its training split - so the confident detections you just saw are not a held-out
+measurement. The 574-tile result above is the measurement.
 
 **"Are the ships real?"** Yes — real MMSIs and real AIS tracks; four are unnamed
 in the corpus and shown as such. Two things are constructed: which of them gets

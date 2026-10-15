@@ -22,7 +22,8 @@ routes/fleet.py
 services/fleet_pipeline.py            ← orchestration lives here and nowhere else
   ├── services/snapshots.py           which passes exist, which tiles per vessel
   ├── ml/cnn_inference.py             classify each vessel's tile
-  │       └── artifacts/oilspill_cnn.pth
+  │       ├── artifacts/oilspill_cnn_best.pth + cnn_config.json
+  │       └── ml/oiltrace_cnn.py         (the notebook's own model + preprocessing)
   ├── services/investigation.py       drift constants, hindcast, forecast
   ├── services/damage.py              drift vector, impact envelope, response priority
   ├── services/environment.py         current/wind at a point in time; historical or fallback
@@ -32,9 +33,9 @@ services/fleet_pipeline.py            ← orchestration lives here and nowhere e
   ├── services/risk.py                which vessels are projected to enter the area
   ├── services/reroute.py             tangent-arc-tangent detour around the zone
   ├── ml/ais_inference.py             score each track for anomalous behaviour
-  │       ├── artifacts/ais_isolation_forest.pkl
-  │       ├── artifacts/ais_scaler.pkl
-  │       └── data/ais_reference/ais_dataset.csv   (normalisation corpus)
+  │       ├── artifacts/ais_anomaly_model.joblib   (forest + scaler + fixed calibration)
+  │       ├── ml/oiltrace_ais.py         (the notebook's own cleaning, features, model)
+  │       └── data/ais_reference/ais_dataset.csv   (searched by /ai/investigate)
   └── services/geo.py                 haversine, bearings, destination points
   ▼
 one JSON payload → frontend/src/lib/oiltrace.ts → App.tsx
@@ -70,8 +71,10 @@ CNN over every vessel again to answer a question no model is involved in.
 | `services/reroute.py` | Detour geometry. Four candidate routes, shortest valid one wins. |
 | `services/counterfactual.py` | The inverse of the hindcast, run per candidate. |
 | `services/geo.py` | Pure geometry. No domain knowledge. |
-| `ml/cnn_inference.py` | Architecture, preprocessing and inference, reproduced from the notebook. |
-| `ml/ais_inference.py` | Feature engineering, scaler, Isolation Forest, corpus normalisation. |
+| `ml/cnn_inference.py` | Adapter: loads the checkpoint and `cnn_config.json`, applies temperature and the validation-fitted threshold, returns the shape the pipeline expects. |
+| `ml/oiltrace_cnn.py` | The notebook's own model class and preprocessing - training and serving share this file. |
+| `ml/ais_inference.py` | Adapter: cleans a track, scores it, aggregates to a behaviour score; scores the reference corpus for `/ai/investigate`. |
+| `ml/oiltrace_ais.py` | The notebook's own AIS cleaning, features and calibrated Isolation Forest. |
 
 ## Two things worth understanding
 
@@ -166,7 +169,7 @@ Three detection outcomes, and t3 produces two of them:
 
 - **`NO_STRONG_CANDIDATE`** on the GRAND DOLPHIN detection. All five candidates'
   counterfactuals robustly say they could not have been the source, while the
-  ranking still shows a leader at **70.54/100**. The banner says nobody is
+  ranking still shows a leader at **50.17/100**. The banner says nobody is
   supported and explains why that score does not amount to support; the ranked
   list stays below it with scores intact.
 - **`LEADING_CANDIDATE_UNSTABLE`** on the NISALAH detection. Three candidates are
@@ -229,30 +232,29 @@ cos(lat) at its own start latitude — two orders of magnitude inside the
 counterfactual's 10 m tolerance. `drift.closure_residual_km()` keeps checking it
 rather than trusting it.
 
-**The AIS corpus is required at runtime.** The notebook normalises anomaly scores
-against dataset-wide min/max of `decision_function`. A single vessel's track
-cannot be placed on that 0–100 scale in isolation, so the corpus ships with the
-app and is scored once, at startup.
+**The AIS corpus is no longer needed to score a track.** The previous model normalised
+anomaly scores against the whole corpus, so one vessel could not be scored in
+isolation. The current one stores a fixed calibration (training median -> 0, 99.5th
+percentile -> 100) with the model, so any track is scored on that scale on its own. The
+corpus still ships with the app because `/ai/investigate` searches it for candidate
+vessels, and it is scored once at startup.
 
-`main.py` warms the models and the corpus in a FastAPI startup hook, so the
-~2.1 s of corpus scoring is paid while uvicorn is booting rather than by whoever
-triggers the first scan. Measured on this machine, before and after that change
-plus de-duplicating the corpus work:
+`main.py` warms the models and the corpus in a FastAPI startup hook, so the cost is
+paid while uvicorn is booting rather than by whoever triggers the first scan. Measured
+on a single CPU core:
 
-| | before | after |
-|---|---|---|
-| first detecting scan | 5.55 s | **1.24 s** |
-| subsequent detecting scan | 0.83 s | 0.72 s |
-| clear pass | 0.25 s | 0.26 s |
+| | time |
+|---|---|
+| startup: score the corpus (52,049 scored records) | 2.2 s |
+| startup: load the CNN checkpoint | 2.3 s |
+| clear pass (12 tiles) | 0.8 s |
+| detecting scan | 1.8 s |
 
-Two things were doing the same work twice. `_reference_normalisation()` and
-`scored_corpus()` each read the same 5.3 MB CSV, ran `build_features()` over it
-and called `decision_function()` on all 52,596 rows, into two separate caches —
-the normalisation is now derived from the scored corpus, which contains exactly
-those values. And `rank_fleet()` called `predict_track()` once per vessel *per
-detection*; a vessel's track is the same track whichever spill it is ranked
-against, so behaviour is now scored once per scan by
-`score_fleet_behaviour()`.
+A clear pass is almost entirely CNN time: 12 tiles at ~65 ms each. The CNN is about 2.5x
+slower per tile than the model it replaced (26 ms on the same machine) - the price of
+the larger architecture - and the scan is correspondingly a little slower than before.
+`rank_fleet()` scores each vessel's behaviour once per scan (`score_fleet_behaviour()`)
+because a vessel's track is the same whichever spill it is ranked against.
 
 ## Fallback chain
 

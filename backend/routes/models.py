@@ -3,7 +3,8 @@ GET /api/models — what the models actually are.
 
 A single backend-owned answer to "what AI is in here?", composed from the
 artifacts themselves rather than retyped. Every metric is read from
-cnn_validation_metrics.json, every hyper-parameter from the pickled estimator,
+cnn_validation_metrics.json (the training notebook's held-out test result),
+every hyper-parameter from the pickled estimator,
 and the attribution weights from services/investigation.py. Nothing here is
 written by hand, so nothing here can drift from what the code does.
 
@@ -27,11 +28,30 @@ from services.stored_result import load_cnn_metrics
 router = APIRouter(tags=["models"], prefix="/api")
 
 
+def _cnn_error_rates(metrics):
+    """Plain-language error rates, computed from the stored metrics - never typed in."""
+    r, p = metrics.get("recall"), metrics.get("precision")
+    if r is None or p is None:
+        return "Validation metrics are unavailable, so error rates cannot be stated."
+    ci = (metrics.get("ci95_scene_bootstrap") or {}).get("recall")
+    ci_text = f" (95% interval {ci[0]:.0%}-{ci[1]:.0%})" if ci else ""
+    miss = f"roughly one spill in {round(1 / (1 - r))} is missed" if r < 1 else "no spill was missed"
+    false = f"roughly one alarm in {round(1 / (1 - p))} is false" if p < 1 else "no alarm was false"
+    return (f"On scenes the model never saw, recall is {r:.1%}{ci_text} - {miss} - and "
+            f"precision is {p:.1%} - {false}. These are held-out figures, not the "
+            "demo's: the demo's SAR tiles come from the same public dataset the model "
+            "was trained on.")
+
+
 def _cnn_card():
-    from ml.cnn_inference import build_transform, model_info
+    from ml.cnn_inference import build_transform, config, model_info
 
     info = model_info()
     metrics = load_cnn_metrics() or {}
+    try:
+        size = int(config()["image_size"])
+    except Exception:
+        size = None
 
     # The transform the model is actually fed, read off the composed object
     # rather than described from memory.
@@ -52,7 +72,7 @@ def _cnn_card():
         "loaded_cleanly": info.get("loaded_cleanly"),
         "input": {
             "format": "single SAR tile (JPEG/PNG), one per vessel per pass",
-            "size": "224 x 224",
+            "size": f"{size} x {size}" if size else None,
             "preprocessing": steps,
         },
         "output": {
@@ -62,7 +82,11 @@ def _cnn_card():
         # Measured, from the artifact. Absent keys stay absent rather than
         # becoming zeros.
         "validation": metrics or None,
-        "validation_source": "cnn_validation_metrics.json (555 held-out Sentinel-1 images)",
+        "validation_source": (
+            f"cnn_validation_metrics.json ({metrics.get('test_samples')} held-out Sentinel-1 tiles"
+            + (f" from {metrics['test_scenes']} unseen scenes" if metrics.get("test_scenes") else "")
+            + (", scene-grouped split" if metrics.get("split") == "scene-grouped" else "") + ")"
+        ) if metrics else "cnn_validation_metrics.json (unavailable)",
         "capabilities": {
             "performs_classification": True,
             "performs_segmentation": False,
@@ -76,12 +100,11 @@ def _cnn_card():
                       "coordinates: the spill position shown is the vessel's own AIS fix, "
                       "which is an input, not a model output."),
         "limitations": [
-            (f"Recall is {metrics['recall']:.0%} on the held-out set — roughly one spill "
-             "in four is missed. For monitoring, a missed spill costs more than a false "
-             "alarm, so this trade-off runs the wrong way and lowering the decision "
-             "threshold is the obvious next step.")
-            if metrics.get("recall") is not None else
-            "Validation metrics are unavailable, so recall cannot be stated.",
+            _cnn_error_rates(metrics),
+            (f"The decision threshold ({metrics['threshold']}) and the probability "
+             "temperature were fitted on the validation split; the test split was "
+             "used once, for reporting.") if metrics.get("threshold") is not None else
+            "Decision threshold and calibration provenance unavailable.",
             "Trained on a public Sentinel-1 oil-spill dataset; performance on other "
             "sensors, sea states or regions is untested.",
             "No segmentation, so nothing in this system measures the size of a slick.",
@@ -109,34 +132,45 @@ def _ais_card():
             # Order is pinned by the saved scaler's feature_names_in_; changing
             # it silently changes what the model is being asked.
             "features": info.get("features"),
-            "feature_order_pinned_by": "the saved scaler's feature_names_in_",
+            "feature_order_pinned_by": "ml/oiltrace_ais.FEATURES, recorded in ais_anomaly_model_meta.json",
             "scaler": info.get("scaler_type"),
             "scaler_samples_seen": info.get("scaler_samples_seen"),
+            "requires_positions": True,
         },
         "output": {
-            "returns": "per-point anomaly score, aggregated to a 0-100 behaviour score "
+            "returns": "per-point anomaly score (0-100), aggregated to a behaviour score "
                        "per vessel (that vessel's maximum)",
-            "normalisation": "dataset-wide over the reference corpus",
+            "normalisation": "fixed calibration learned on the training corpus "
+                             "(median -> 0, 99.5th percentile -> 100)",
         },
+        "data_cleaning": {
+            "missing_value_codes": "SOG 102.3, COG 360 and heading 511 mean 'not available'. "
+                                   "They are cleared, and speed and course are recovered from "
+                                   "the position track where possible.",
+            "segments": "tracks are split at gaps over 15 minutes; features never span a gap",
+        },
+        "calibration": info.get("calibration"),
         "reference_corpus": info.get("reference_corpus"),
-        "corpus_required_at_runtime": True,
-        "corpus_reason": ("Scores are normalised against the whole corpus, so a single "
-                          "vessel's track cannot be placed on the 0-100 scale without it."),
+        "corpus_required_at_runtime": False,
+        "corpus_reason": ("Scores use a fixed calibration stored with the model, so one "
+                          "vessel's track can be scored on the 0-100 scale on its own. "
+                          "The reference corpus is still searched by /ai/investigate."),
         "statement": ("An anomaly indicates unusual vessel behaviour. It does not by "
                       "itself prove illegal behaviour, a discharge, or oil-spill "
                       "causation."),
-        "known_flaw": {
-            "field": "course_change",
-            "circular": info.get("course_change_is_circular"),
-            "detail": ("359 deg to 1 deg is recorded as a 358 deg change rather than 2. "
-                       "Reproduced deliberately: the saved scaler was fitted on those "
-                       "values, so correcting it requires retraining."),
-        },
+        # The previous model carried a non-circular course_change flaw and fed AIS
+        # missing-value codes to the forest. Both are fixed in this model, so there
+        # is nothing to disclose here; the field stays so the card's shape is stable.
+        "known_flaw": None,
         "limitations": [
             "Unsupervised: there are no labels, so 'anomalous' means statistically "
             "unusual within this corpus, not wrong or illegal.",
             "AIS has coverage gaps and can be switched off; absence of an anomaly is "
             "not evidence of normal behaviour.",
+            "Trained on one Gulf of Mexico corpus (52,943 records, 347 vessels). Its "
+            "features are location independent, but behaviour in other waters is untested.",
+            "Checked only by injecting known unusual behaviour into held-out vessels - "
+            "which shows it separates gross changes, not that it finds real violations.",
         ],
     }
 
@@ -210,6 +244,8 @@ def models():
             "An anomaly is not causation.",
             "Demo data: vessel co-presence is constructed by a per-vessel time shift, "
             "and which vessels carry an oily tile is a seeded simulation.",
+            "Demo tiles are drawn from the public dataset the CNN was trained on, so the "
+            "demo's detections are not a held-out accuracy test.",
         ],
     }
 

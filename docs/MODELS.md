@@ -1,12 +1,17 @@
 # Model cards
 
-Both models were trained in `handoff/OILTRACE_AIS_Model.ipynb`, which is
-authoritative. The adapters in `backend/ml/` reproduce its architecture,
-preprocessing and scoring exactly — including one known flaw, documented below.
+Both models were trained in notebooks kept under `handoff/`
+(`handoff/cnn/OILTRACE_CNN_Final.ipynb` and `handoff/ais/OILTRACE_AIS_Final.ipynb`),
+which are authoritative. Each notebook writes the importable module the backend
+runs - `backend/ml/oiltrace_cnn.py` and `backend/ml/oiltrace_ais.py` are those same
+files - so a prediction made here is a prediction made in the notebook. The adapters
+`backend/ml/cnn_inference.py` and `ais_inference.py` only fit them to the shape the
+rest of the backend already used. (The previous models and their notebook are kept in
+`handoff/previous/`.)
 
 **The live source of these facts is `GET /api/models`** (`backend/routes/models.py`),
 which composes them from the artifacts at request time: metrics from
-`cnn_validation_metrics.json`, hyper-parameters from the pickled estimator, and
+`cnn_validation_metrics.json`, hyper-parameters from the fitted estimator, and
 the attribution weights from `services/investigation.py`. The MODEL INFO button
 in the app header renders exactly that payload. This document explains the same
 material at greater length; where the two ever disagree, the endpoint is right,
@@ -18,73 +23,96 @@ because nothing in it is typed by hand.
 
 | | |
 |---|---|
-| File | `backend/artifacts/oilspill_cnn.pth` (`state_dict`, 1.7 MB) |
-| Task | **Binary image classification** — 0 = NO OIL SPILL, 1 = OIL SPILL |
-| Parameters | 421,570 |
-| Framework | PyTorch 2.13, CPU (CUDA used automatically if present) |
-| Adapter | `backend/ml/cnn_inference.py` |
+| Files | `backend/artifacts/oilspill_cnn_best.pth` (`state_dict`, 4.8 MB) and `cnn_config.json` |
+| Task | **Binary image classification** - 0 = NO OIL SPILL, 1 = OIL SPILL |
+| Parameters | 1,206,370 |
+| Framework | PyTorch (trained on 2.11, runs on 2.2+), CPU - CUDA used automatically if present |
+| Adapter | `backend/ml/cnn_inference.py` over `backend/ml/oiltrace_cnn.py` |
 
-### Architecture (notebook cell 35)
+### Architecture
 
-```python
-features = Sequential(
-    Conv2d(3, 32, 3, padding=1),  ReLU(), MaxPool2d(2),
-    Conv2d(32, 64, 3, padding=1), ReLU(), MaxPool2d(2),
-    Conv2d(64, 128, 3, padding=1),ReLU(), MaxPool2d(2),
-    Conv2d(128, 256, 3, padding=1),ReLU(), AdaptiveAvgPool2d((1, 1)),
-)
-classifier = Sequential(
-    Flatten(), Linear(256, 128), ReLU(), Dropout(0.4), Linear(128, 2),
-)
-```
+Four blocks of `Conv-BatchNorm-ReLU` x2 then `MaxPool` (32, 64, 128, 256 channels),
+global average pooling, and a `Dropout(0.30) - Linear(256,128) - ReLU - Dropout(0.30) -
+Linear(128,2)` head. The checkpoint loads into this class with no missing or
+unexpected keys (asserted by `tests/test_model_swap.py`).
 
-### Preprocessing (cell 33) — do not substitute values
+### Preprocessing - do not substitute values
 
 ```python
 transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.Grayscale(num_output_channels=3),
     transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),     # NOT the ImageNet values
 ])
 ```
 
-Images are opened with `.convert("RGB")`, matching the notebook's inference cells
-(73/76). Training used `.convert("L")`, but both funnel through `Grayscale(3)`, so
-the resulting tensor is identical.
+Images are opened with `.convert("L")`, exactly as in training.
 
-### Inference
+### Decision rule - all fitted on the validation split only
 
-`softmax(dim=1)` → `argmax` → confidence is the probability **of the predicted
-class**, not of class 1.
+```
+probability = softmax(logits / T)[oil]        T = 1.0286   (temperature scaling)
+verdict     = OIL SPILL  when probability >= 0.57          (threshold = max validation F1)
+confidence  = the calibrated probability of the verdict that was returned
+```
 
-### Performance — 555 held-out Sentinel-1 images
+Because the threshold is 0.57 rather than 0.5, a tile with an oil probability between
+0.50 and 0.57 is classed NO OIL SPILL with a displayed confidence under 50%. That is
+intended: the confidence is the probability of the verdict returned. Test-time
+augmentation is deliberately **not** applied - the reported metrics were measured
+without it.
+
+### How it was evaluated
+
+The 5,536 usable tiles (after removing 90 exact duplicates and 4 images whose identical
+copy carries the opposite label) are 400x400 crops, many overlapping 50 %, cut from
+4,492 larger scenes. A random split would put overlapping pixels of one scene in both
+training and test, so the split is **grouped by scene** (`StratifiedGroupKFold`, 80/10/10):
+no scene contributes to more than one of train / validation / test. Calibration and
+the threshold used the validation split; the test split was used once.
+
+### Performance - 574 held-out tiles from 451 unseen scenes
 
 | Accuracy | Precision | Recall | F1 | ROC-AUC |
 |---|---|---|---|---|
-| 89.91% | 97.78% | 71.35% | 82.50% | 93.20% |
+| 96.34% | 94.33% | 94.82% | 94.57% | 99.33% |
+
+95% intervals (resampling whole scenes): accuracy 94.6-97.9 %, precision 90.5-97.4 %,
+recall 90.7-98.1 %, ROC-AUC 98.7-99.8 %. Expected calibration error 1.4 %.
 
 |  | Predicted no oil | Predicted oil |
 |---|---|---|
-| **Actual no oil** | 367 | 3 |
-| **Actual oil** | 53 | 132 |
+| **Actual no oil** | 370 | 11 |
+| **Actual oil** | 10 | 183 |
 
-**Read this honestly.** Precision 97.78% means almost every alarm is real — only
-3 false positives in 370 clean images. Recall 71.35% means it misses about 29% of
-actual spills: 53 of 185. For continuous monitoring that asymmetry is the wrong
-way round, since a missed spill costs more than a false alarm. Lowering the
-decision threshold would trade precision for recall.
+**Read this honestly.** Roughly one alarm in 18 is false and roughly one spill in 19 is
+missed. The intervals are wide enough that "about 95%" is the defensible claim, not
+"96.3%". Training ran all 50 epochs and the best validation epoch was the last one, so
+it had not plateaued. And this is one public dataset: other sensors, sea states or
+regions are untested.
 
 ### What it cannot do
 
 No segmentation head, so **no mask, boundary, area, thickness or volume**. No
-geolocation — it classifies a tile and says nothing about where that tile is. No
-look-alike discrimination: it was not trained to separate oil from biogenic
-slicks, low-wind zones or ship wakes, which is the hard part of SAR detection.
+geolocation - it classifies a tile and says nothing about where that tile is. No
+look-alike discrimination: it has two classes and was not trained to separate oil from
+biogenic slicks, low-wind zones or ship wakes, which is the hard part of SAR detection.
+(`oiltrace_cnn.py` contains an approximate Grad-CAM mask helper from the notebook; the
+backend deliberately does not expose it, because a heat-map region is not a
+segmentation.)
 
-Verified reproduction: `class_1.jpg` scores **0.805028**, matching the `0.805` in
-the delivered `oiltrace_ai_output_final.json` to the digits it carries — a wrong
-resize, normalisation or colour path would have shifted it.
+### The demo is not a test
+
+The demo's satellite tiles are drawn from the same public dataset the CNN was trained on
+- of the bundled tiles, 9 were in the training split, 7 in validation and 1 in test (2
+could not be matched) - so its confident detections are not a held-out measurement. The
+574-tile figure above is.
+
+### Verified reproduction
+
+Replaying the notebook's exact test split (574 tiles) through `backend/ml/cnn_inference.py`
+reproduces the notebook's confusion matrix exactly: TN 370, FP 11, FN 10, TP 183.
 
 ---
 
@@ -92,64 +120,63 @@ resize, normalisation or colour path would have shifted it.
 
 | | |
 |---|---|
-| Files | `ais_isolation_forest.pkl` (1.4 MB), `ais_scaler.pkl` |
+| File | `backend/artifacts/ais_anomaly_model.joblib` (forest + scaler + calibration), `ais_anomaly_model_meta.json` |
 | Task | Unsupervised anomaly detection over vessel movement |
-| Parameters | `n_estimators=200`, `contamination=0.02`, `random_state=42` |
-| Framework | scikit-learn **1.6.1** — pinned; the pickles were created with it |
-| Adapter | `backend/ml/ais_inference.py` |
+| Parameters | `n_estimators=300`, `contamination=0.02`, `random_state=42` |
+| Framework | scikit-learn **1.6.1** - pinned; the artifact was exported with it (`python scripts/train_ais_model.py` regenerates it) |
+| Adapter | `backend/ml/ais_inference.py` over `backend/ml/oiltrace_ais.py` |
 
-### Features — order is pinned by the scaler
+### What changed from the previous model, and why it matters
 
-```python
-["SOG", "speed_change", "COG", "course_change", "time_gap_minutes"]
-```
+1. **AIS "not available" codes are no longer scored as behaviour.** `SOG 102.3`, `COG 360`
+   and `Heading 511` mean "no value". The previous model fed 102.3 knots straight into
+   the forest, so a missing-value flag was ranked the most anomalous record in the
+   corpus - and the top candidate in the original completed case owed its behaviour score
+   of 100 to it. The reference corpus holds 132 such speed codes (4 vessels) and 446 course
+   codes; they are cleared and speed/course are **recovered from the position track**
+   (132 speeds and 251 courses recovered).
+2. Features are computed **inside a track segment** (a gap over 15 minutes starts a new
+   one), so a vessel's absence between two visits is not "behaviour". 347 vessels form
+   797 segments.
+3. Features are **location independent**: `[sog, accel_kn_per_min, turn_rate_deg_per_min,
+   speed_mismatch_kn]` - speed, how fast it changes, how fast the course changes, and
+   how far the reported speed disagrees with the speed the positions imply. The previous
+   model also used raw course, so shipping-lane direction could masquerade as anomaly.
+   The course change is now circular (359 to 1 degree is 2, not 358).
+4. The 0-100 score uses a **fixed calibration** (0 = the training median, 100 = its 99.5th
+   percentile; stored with the model). It no longer needs the corpus at request time, so
+   one vessel's track can be scored on its own.
 
-Not inferred: the saved `StandardScaler` carries `feature_names_in_` with exactly
-this order. Note `COG` sits **third**, between the two derived features, which is
-not the order a reader would guess.
-
-### Feature engineering (cells 12–13)
-
-```python
-df = df.sort_values(["MMSI", "BaseDateTime"])
-df["speed_change"]     = df.groupby("MMSI")["SOG"].diff().abs()
-df["course_change"]    = df.groupby("MMSI")["COG"].diff().abs()      # naive
-df["time_gap_minutes"] = df.groupby("MMSI")["BaseDateTime"].diff().dt.total_seconds() / 60
-df = df.dropna(subset=["speed_change", "course_change", "time_gap_minutes"])
-```
-
-The `dropna` removes each vessel's first fix, which is why a track needs at least
-two valid time-ordered points.
-
-### Scoring (cell 15, then 52/53)
+### Scoring
 
 ```
-anomaly_raw     = model.decision_function(scaled)
-anomaly_score   = 100 * (max_raw - anomaly_raw) / (max_raw - min_raw)
-is_anomaly      = model.predict(scaled) == -1        # -1 anomalous, 1 normal
-behaviour_score = max(anomaly_score) per vessel, clipped 0-100
+anomaly_score    calibrated 0-100, per record
+is_anomaly       IsolationForest.predict == -1
+behaviour_score  per vessel: max(anomaly_score) over its records      (unchanged)
 ```
 
-`max_raw` and `min_raw` are **dataset-wide**. A vessel's behaviour score therefore
-depends on the corpus it is normalised against, which is why
-`data/ais_reference/ais_dataset.csv` (52,943 records, 347 vessels) ships with the
-app. Without it the adapter returns `behaviour_score: null` rather than a number
-on an unknown scale.
+Because the score is clipped at the training 99.5th percentile and the vessel's score is
+its **maximum**, several vessels can tie at 100 - it means "had at least one record as
+unusual as the most unusual 0.5% of training traffic". Records must carry `LAT` and
+`LON`: reported speed is cross-checked against the position track, so the model cannot
+score a track without positions.
 
-### Known flaw, reproduced deliberately
+### Checked how
 
-**`course_change` is not circular.** 359° → 1° is recorded as 358, not 2. The
-notebook has a corrected version in cell 18, but that belongs to a second pipeline
-whose model was never saved. The naive form is required for compatibility with the
-saved scaler's `mean_`/`scale_`; fixing it means retraining. Surfaced in the API as
-`course_change_is_circular: false`.
+There is no ground truth for AIS anomalies, so the notebook checks the model by
+**injecting** known unusual behaviour (speed collapse, erratic turning, speed/position
+mismatch) into 69 held-out vessels: ROC-AUC 0.993, 86% of injected rows flagged, 0.9%
+of ordinary rows flagged. That shows the model separates gross changes from ordinary
+traffic. It does **not** show it finds real violations - it is unsupervised, and
+`contamination = 0.02` flags about 2% of records by construction.
 
-### Which pipeline was saved
+### What it cannot do
 
-The notebook has two. The artifacts prove the **first** (cells 12–15) was saved:
-`n_features_in_=5` and `n_samples_seen_=52596` — that is 52,943 raw records minus
-347 first-per-vessel rows. The cell-19 variant (4 features, 300 trees, with the
-circular fix) was not saved.
+Anomalous means *statistically unusual compared with the training traffic* - not
+"did something wrong". It was trained on one Gulf of Mexico corpus (52,943 records, 347
+vessels, Dec 2020-Mar 2021); its features are location independent, but behaviour in other
+waters is untested. AIS has gaps and can be switched off, so no anomaly is not evidence of
+normal behaviour.
 
 ---
 

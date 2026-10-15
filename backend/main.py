@@ -6,8 +6,8 @@ Run with:
 
 Two trained models do the work, both loaded from backend/artifacts/:
 
-    oilspill_cnn.pth          binary SAR classifier (oil / no oil)
-    ais_isolation_forest.pkl  behavioural anomaly detector over AIS tracks
+    oilspill_cnn_best.pth       binary SAR classifier (oil / no oil), with cnn_config.json
+    ais_anomaly_model.joblib    behavioural anomaly detector over AIS tracks
 
 Everything between them - drift hindcast, the AIS search, the suspect ranking and
 the forward projection - is computed here. Nothing is hardcoded; anything the
@@ -35,11 +35,11 @@ def _warm_models():
     """
     Load the models and score the AIS corpus during boot.
 
-    Scoring the 52,596-record corpus is unavoidable — behaviour scores are
-    normalised dataset-wide, so a single vessel cannot be placed on the 0-100
-    scale without it. What IS avoidable is paying for it on the first request,
-    which in a demo means the audience watches it happen. Doing it here moves
-    the cost to startup, where uvicorn is already booting.
+    Scoring the 52,943-record corpus is only needed by /ai/investigate, which
+    searches it (behaviour scores themselves use a fixed calibration and do not
+    need it). Paying for it on the first request would mean the audience watches
+    it happen in a demo, so it is done here, at startup, where uvicorn is
+    already booting.
 
     Failures are logged and swallowed: a missing artifact must degrade the app,
     not stop it from serving. The routes already report model availability.
