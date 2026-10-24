@@ -1,0 +1,73 @@
+{
+  "test_roc_auc_replayed": 0.9933499245236832,
+  "test_average_precision_replayed": 0.9887510718789528,
+  "best_epoch_val_auc": 0.9902658473885512,
+  "epoch_of_max_val_auc": 50,
+  "last8_val_auc_min": 0.98579848266349,
+  "last8_val_auc_max": 0.9902658473885512,
+  "lr_final": 0.000125,
+  "test_ece_calibrated": 0.014009654829446386,
+  "val_ece_raw": 0.022896587761088695,
+  "val_ece_calibrated": 0.023758973370543664,
+  "scenario_detection_1": {
+    "ship": "Vessel B",
+    "envelope_radius_km": 5.57663661001471,
+    "assessment": "LEADING_CANDIDATE_UNSTABLE",
+    "reasons": [
+      "Which vessel ranks first depends on the drift assumption: Vessel K under the shipped estimate, Vessel L under the environment-aware one.",
+      "Vessel K's counterfactual: The verdict is consistent, but under the environment-aware drift it holds by only 0.06 km against a 5.59 km threshold \u2014 it turns on the drift assumption, not on where the vessel was."
+    ],
+    "candidates": [
+      {
+        "rank": 1,
+        "name": "Vessel K",
+        "score": 86.44,
+        "miss_km": 2.88,
+        "margin_km": 3.12,
+        "robustness": "moderately sensitive",
+        "grade": "LOW"
+      },
+      {
+        "rank": 2,
+        "name": "Vessel B",
+        "score": 73.45,
+        "miss_km": 4.37,
+        "margin_km": 1.63,
+        "robustness": "moderately sensitive",
+        "grade": "MEDIUM"
+      },
+      {
+        "rank": 3,
+        "name": "Vessel H",
+        "score": 72.71,
+        "miss_km": 9.15,
+        "margin_km": 3.15,
+        "robustness": "robust",
+        "grade": "HIGH"
+      },
+      {
+        "rank": 4,
+        "name": "Vessel L",
+        "score": 68.79,
+        "miss_km": 3.82,
+        "margin_km": 2.18,
+        "robustness": "moderately sensitive",
+        "grade": "MEDIUM"
+      },
+      {
+        "rank": 5,
+        "name": "Vessel C",
+        "score": 66.85,
+        "miss_km": 8.41,
+        "margin_km": 2.41,
+        "robustness": "moderately sensitive",
+        "grade": "MEDIUM"
+      }
+    ]
+  },
+  "scenario_detection_2": {
+    "assessment": "NO_STRONG_CANDIDATE",
+    "consistent": 0,
+    "candidates": 5
+  }
+}

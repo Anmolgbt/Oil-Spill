@@ -19,8 +19,10 @@ export function GovernmentActions({topCandidate, urgency}: GovernmentActionsProp
       : "Pull AIS, voyage and cargo records for the ranked candidates."},
     {title: "Alert", icon: Bell, text: "Notify the port authority, flag state and vessels operating nearby."},
     {title: "Contain", icon: Waves, text: "Task containment and skimming assets to the modelled envelope."},
-    {title: "Enforce", icon: Shield, text: serious
-      ? "Detain the leading candidate pending inspection; refer for prosecution if evidence holds."
+    // The ranking is an investigation lead, never grounds for detention on its own:
+    // escalation goes through independent evidence (sampling, records, inspection).
+    {title: "Verify", icon: Shield, text: serious
+      ? "Request inspection and oil sampling for the leading candidates. The ranking alone is not grounds for detention or prosecution."
       : "Hold reporting and routing records on file for review."},
   ];
   return <section className="government-actions"><div className="eyebrow">RECOMMENDED ACTIONS</div>

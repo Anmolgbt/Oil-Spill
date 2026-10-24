@@ -28,6 +28,18 @@ because nothing in it is typed by hand.
 | Parameters | 1,206,370 |
 | Framework | PyTorch (trained on 2.11, runs on 2.2+), CPU - CUDA used automatically if present |
 | Adapter | `backend/ml/cnn_inference.py` over `backend/ml/oiltrace_cnn.py` |
+| Training data | CSIRO Sentinel-1 SAR oil/non-oil chips, [DOI 10.25919/4v55-dn16](https://doi.org/10.25919/4v55-dn16), CC BY-SA 4.0 |
+
+### Training data
+
+Blondeau-Patissier, Schroeder, Diakogiannis and Li (2022), *CSIRO Sentinel-1 SAR image
+dataset of oil- and non-oil features for machine learning (Deep Learning)*. It has 5,630
+grayscale 400×400 JPEG chips: 3,725 in class 0 (no oil features, including look-alikes)
+and 1,905 in class 1 (oil features). The class meaning is the dataset authors'. We
+fetch the files from a public GitHub mirror that is a file-for-file copy of the release
+(same file count, same class counts). We use it rather than the Kaggle copy because only
+the original filenames carry the scene identifier the grouped split needs. See
+[`DATA_LICENSES.md`](../DATA_LICENSES.md).
 
 ### Architecture
 
@@ -88,9 +100,26 @@ recall 90.7-98.1 %, ROC-AUC 98.7-99.8 %. Expected calibration error 1.4 %.
 
 **Read this honestly.** Roughly one alarm in 18 is false and roughly one spill in 19 is
 missed. The intervals are wide enough that "about 95%" is the defensible claim, not
-"96.3%". Training ran all 50 epochs and the best validation epoch was the last one, so
-it had not plateaued. And this is one public dataset: other sensors, sea states or
-regions are untested.
+"96.3%". This is one public dataset, so other sensors, sea states and regions are
+untested.
+
+**Training length.** The run is cap-limited. Early stopping (patience 8) never fired
+within the 50-epoch cap, and the best validation ROC-AUC (0.9903) came in the last epoch.
+The curve had nearly flattened: validation ROC-AUC stayed between 0.986 and 0.990 over
+epochs 43–50. A longer run might add a little. We did not retrain, so that the evaluated
+model stays fixed.
+
+**Calibration.** The temperature is close to 1 (T = 1.0286), so scaling barely changes
+the probabilities. Validation ECE is 0.0229 before scaling and 0.0238 after (10 bins).
+The raw model was already well calibrated.
+
+**Near-duplicate audit.** The grouped split cannot catch the same sea patch filed under a
+different scene ID, or a rotated copy. A perceptual-hash check (64-bit pHash, all 8
+orientations, Hamming distance ≤ 8) finds 58 test tiles in 52 scenes with a near-duplicate
+in training. At ≤ 4 bits the count is 7. Re-scoring the frozen model without those 58
+tiles gives 96.12% accuracy, 94.19% recall and 0.9930 ROC-AUC, so leakage does not explain
+the result. Reproduce with `backend/scripts/check_near_duplicates.py`. The output is in
+`handoff/cnn/near_duplicate_report.json`.
 
 ### What it cannot do
 
@@ -98,9 +127,9 @@ No segmentation head, so **no mask, boundary, area, thickness or volume**. No
 geolocation - it classifies a tile and says nothing about where that tile is. No
 look-alike discrimination: it has two classes and was not trained to separate oil from
 biogenic slicks, low-wind zones or ship wakes, which is the hard part of SAR detection.
-(`oiltrace_cnn.py` contains an approximate Grad-CAM mask helper from the notebook; the
+(`oiltrace_cnn.py` contains an approximate Grad-CAM mask helper from the notebook. The
 backend deliberately does not expose it, because a heat-map region is not a
-segmentation.)
+segmentation. The paper shows two Grad-CAM overlays as a visual aid only.)
 
 ### The demo is not a test
 
@@ -190,8 +219,8 @@ final = 0.40 × proximity + 0.30 × trajectory + 0.30 × behaviour
 
 | Term | How it is computed |
 |---|---|
-| `proximity` | `100 × (1 − min_distance / 50 km)`, clipped 0–100 |
-| `trajectory` | Convergence: how much the vessel closed on the source across the window |
+| `proximity` | `100 × (1 − min_distance / r)`, clipped 0–100. In the fleet scan, `r` = 3 × the drift-envelope radius (16.7 km at 4 h). `/ai/investigate` keeps the notebook's 50 km |
+| `trajectory` | `100 × (d_first − d_min) / d_first`, clipped 0–100, over fixes from 6 h before to 2 h after release |
 | `behaviour` | The Isolation Forest's `behaviour_score` for that track |
 
 Deliberately a transparent weighted sum, not a learned ranker: a judge can
@@ -268,22 +297,12 @@ a miss inside that cannot be separated from the observation under these
 assumptions; a miss outside it means the observation does not follow from that
 vessel having been the source.
 
-**The yardstick is the test's own drift, not the map's circle.** This was wrong
-until Phase 16. The counterfactual drifted at the hindcast's 1.5 km/h toward
-135° but was handed the affected-area radius — 5.58 km, sized by
-`damage.drift_vector()`'s 1.394 km/h toward 181.2°. It moved a parcel of oil one
-way and judged it against how far it could have gone another way. Each mode now
-derives its own threshold: **6.00 km** for the legacy vector at a 4 h age, the
-integrated displacement (5.59 km in fallback) for the environment-aware one. The
-map's affected-area circle stays at 5.58 km — it answers "how far could the oil
-have reached at all", sized by the best available estimate, which is a different
-question from "how far could THIS assumption have carried it".
-
-Measured consequences: **no verdict changed** (6.26 and 6.23 km sat outside 5.58
-and still sit outside 6.00), and no miss distance changed — those are
-threshold-independent. Two robustness classifications moved, because those are
-margin questions: NISALAH *highly* → *moderately sensitive* (0.571 → 0.653) and
-HARVEY HERD *robust* → *moderately sensitive* (0.918 → 0.878).
+**The yardstick is the test's own drift, not the map's circle.** Each mode derives its
+own threshold from the vector that moves the oil. That is **6.00 km** for the kinematic
+vector at a 4 h age, and the integrated displacement (5.59 km in fallback) for the
+environment-aware one. The map's affected-area circle (5.58 km) answers a different
+question: how far the oil could have reached at all, using the best available
+estimate.
 
 ### The same test, through the environment field
 
@@ -297,14 +316,14 @@ and the margins invert.**
 
 | Candidate | Legacy | Environment-aware | Distance from flipping |
 |---|---|---|---|
-| MR CANOPUS (ranked #1) | 2.88 km, consistent | 5.53 km, consistent | 3.12 km → **0.06 km** |
-| ACHILLEAS | 3.82 km, consistent | 1.08 km, consistent | 2.18 → 4.51 km |
-| SAKAKA | 14.20 km, not | 18.71 km, not | 8.20 → 13.12 km |
+| Vessel K (ranked #1) | 2.88 km, consistent | 5.53 km, consistent | 3.12 km → **0.06 km** |
+| Vessel L | 3.82 km, consistent | 1.08 km, consistent | 2.18 → 4.51 km |
+| Vessel F | 14.20 km, not | 18.71 km, not | 8.20 → 13.12 km |
 
 Same verdict, opposite confidence. The vessel ranked first is consistent by
 three kilometres under one assumption and by sixty metres under the other, and
-the vessel that best reproduces the observation changes from MR CANOPUS to
-ACHILLEAS. Reporting only "both modes agree" would hide precisely that, which is
+the vessel that best reproduces the observation changes from Vessel K to
+Vessel L. Reporting only "both modes agree" would hide precisely that, which is
 why the distance-from-flipping travels with the verdict.
 
 **Agreement is not corroboration.** No environmental dataset is committed, so
@@ -312,10 +331,9 @@ the environment-aware run is a *different assumption*, not an observation — an
 a reanalysis would be a model output too. Neither mode is validated against a
 known attribution.
 
-It is **independent of the ranking and can disagree with it** — in the shipped
-t3 demo the third-ranked vessel (GRAND DOLPHIN, 78.91) misses by 9.72 km and is
-not consistent, while the sixth-ranked one (ACHILLEAS, 70.38) lands 3.82 km
-away, inside the envelope. Neither outcome establishes causation, and the test
+It is **independent of the ranking and can disagree with it**. In the shipped T3 demo,
+the third-ranked vessel (Vessel H, 72.71) misses by 9.15 km and is not consistent, while
+the fourth-ranked one (Vessel L, 68.79) lands 3.82 km away, inside the 6.00 km threshold. Neither outcome establishes causation, and the test
 inherits every assumption in the drift model rather than checking any of them.
 
 ### Robustness — sensitivity to the assumption, not accuracy
@@ -366,7 +384,3 @@ verdicts are mostly robust (a vessel 14 km out stays 14 km out however the drift
 is nudged), while every *consistent* verdict is sensitive — the consistency
 radius is 6.00 km and the swept drift band moves the simulated slick several
 kilometres, so exculpatory results here are firmer than incriminating ones.
-
-(This sentence read "the consistency disc is 5.58 km across" until Phase 21: the
-radius moved to 6.00 km when each mode was given its own threshold, and "across"
-described a radius as if it were a diameter.)

@@ -38,8 +38,12 @@ def main():
     manifest = pd.read_csv(HANDOFF / "cnn_split_manifest.csv")
     test = manifest[manifest.split == "test"]
     tn = fp = fn = tp = 0
+    per_tile = []
     for row in test.itertuples():
-        got = predict_image(image_path=data / str(row.label) / row.file)["class_id"]
+        res = predict_image(image_path=data / str(row.label) / row.file)
+        got = res["class_id"]
+        per_tile.append({"file": row.file, "label": row.label, "scene": row.scene,
+                         "oil_probability": res["oil_probability"], "predicted": got})
         if row.label == 1:
             tp, fn = tp + (got == 1), fn + (got == 0)
         else:
@@ -49,6 +53,12 @@ def main():
     mine, theirs = (tn, fp, fn, tp), (ref["tn"], ref["fp"], ref["fn"], ref["tp"])
     print(f"{len(test)} test tiles | replay TN/FP/FN/TP = {mine} | notebook = {theirs}")
     print("IDENTICAL" if mine == theirs else "MISMATCH")
+    # Per-tile probabilities feed scripts/check_near_duplicates.py and
+    # scripts/make_paper_figures.py. They are a replay, never a new evaluation.
+    out = BACKEND.parent / "paper" / "data" / "cnn_test_predictions.csv"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(per_tile).to_csv(out, index=False)
+    print(f"per-tile probabilities -> {out.relative_to(BACKEND.parent)}")
     raise SystemExit(0 if mine == theirs else 1)
 
 

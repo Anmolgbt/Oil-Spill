@@ -1,36 +1,11 @@
 # Demo walkthrough
 
-Roughly six minutes. The story is: *we watch a fleet, the satellite finds oil, we
-work backwards to who was there — and then we test that answer instead of
-asserting it.*
+About six minutes. The story: *we watch a fleet, the satellite finds oil, we work
+backwards to who was there, and then we test that answer instead of asserting it.*
 
-## The guided run
-
-Press **DEMO** in the header, or open `?demo=1`, and the app walks the
-investigation in thirteen steps: the pass, the detection, the age, the
-environmental reconstruction, the source region, the AIS search, the ranking,
-why this vessel, the counterfactual, the forecast, the vessels in the way, **the
-second detection**, and the report.
-
-Two things about it are deliberate.
-
-**It scrolls to and outlines the real panel.** Nothing in the walkthrough is a
-duplicate of a screen — a duplicate is free to drift from the thing it depicts,
-and a demo showing a stale copy of your own system is worse than no demo. Every
-line of step text is assembled from what the panel already says: the stage
-table's own wording, the assessment's reasons, the narrative beats. No claim is
-written for the demo that the product does not already make.
-
-**It visits both detections.** The first has a leading candidate whose identity
-depends on a drift constant nobody measured; the second is where the system
-declines to name anyone at all. Showing only the confident half would
-misrepresent the system to exactly the audience the mode exists for.
-
-The mode hides the pass selector and the uploader and nothing else. It does not
-lock the interface — someone will interrupt to ask "can you click that?", and
-**Next** re-establishes the step rather than the mode forbidding anything.
-
-The rest of this document is the same walkthrough done by hand.
+Every number below is what the shipped build shows on pass T3. Vessels appear under
+pseudonyms (Vessel A–L): their tracks are real AIS, but the incident is constructed, so
+no real ship is named as a suspect.
 
 ## Before you start
 
@@ -38,276 +13,184 @@ The rest of this document is the same walkthrough done by hand.
 ./run_demo.sh          # or the two commands in the README
 ```
 
-Open http://localhost:5173 and wait for the first scan. It takes about **6
-seconds** — it scores the whole AIS corpus once, then caches, so every later
-scan is well under a second. **Load the page before you start presenting**, so
-the audience never sees that wait.
+Open http://localhost:5173 and wait for the first scan. It takes about **6 seconds**,
+because the AIS corpus is scored once and then cached. Every later scan is well under a
+second. **Load the page before you start presenting.**
 
 ## 1. What we are looking at (40 s)
 
-Twelve vessels in a Gulf of Mexico traffic cluster, watched by satellite every
-4 hours. The left panel is the fleet; the map is the area; the percentage on each
-row is the CNN's confidence in its own call for that vessel's tile. Four vessels
-are recorded without a name and show as `VESSEL <MMSI>` — that is what the corpus
-knows about them, and unnamed records are normal in real AIS.
+Twelve vessels in a Gulf of Mexico traffic cluster, observed by satellite every 4 hours.
+The left panel is the fleet, and the map shows the area. The percentage on each row is
+the CNN's calibrated confidence in its own call for that vessel's tile. It never rounds
+up to 100%: the strongest calls show as `>99%`.
 
-Say the provenance early, before you are asked: **the vessels are real** — real
-MMSIs, real AIS tracks from the MarineCadastre corpus — **and the SAR imagery and
-both models are real.** Two things are constructed: which vessels get an oily tile
-on the last pass, and **that these vessels are at sea at the same time**.
+Give the provenance early, before anyone asks:
 
-On the second: the corpus samples transits, not continuous surveillance. A vessel
-appears for one to two hours and leaves; at most four are simultaneously live at
-any instant across the whole 88-day corpus. So each vessel's timestamps are
-shifted onto a shared clock. No position is altered — only when it is said to
-have happened. **Open HOW THIS WAS DERIVED and show them the banner.** Volunteering
-this is much stronger than being caught by it.
+- **Real:** the AIS tracks (MarineCadastre.gov), the SAR imagery (the CSIRO Sentinel-1
+  dataset) and both trained models.
+- **Constructed:** which vessels get an oily tile on the last pass, and the fact that
+  these vessels are at sea at the same time.
+- **Pseudonymised:** the vessel names and MMSIs.
 
-If asked why not Indian waters: no open AIS corpus carries Indian-flag traffic at
-this density. An earlier version of this repo invented an Indian fleet and had to
-label every vessel synthetic. Real data was the better trade. Nothing in the
-method is region-specific.
+On co-presence: the corpus samples transits, not continuous surveillance. Across all 88
+days, the best window holds 3 of 347 vessels with a fix at all three passes. So each
+vessel's timestamps are shifted onto a shared clock. No position is altered. Open **How
+this was derived** to show where this is stated. Volunteering it is much stronger than
+being caught by it.
 
 ## 2. Clean passes (30 s)
 
-Click **T1**. Green banner: *No oil signature in pass t1. 6 vessels checked.*
-Every vessel blue and CLEAR. No investigation panels appear — nothing to
-investigate.
+Click **T1**. Green banner: *No oil signature in pass t1. 12 vessels checked.* No
+investigation panels appear, because there is nothing to investigate.
 
-Click **T2**. Clean again. This matters for the next step: it is what bounds the
-age.
+Click **T2**. It is clean again. This matters for the next step, because it is what bounds
+the age.
 
 ## 3. Detection (45 s)
 
-Click **T3**. Red banner. Two vessels flip red:
+Click **T3**. The banner turns red and two vessels flip:
 
-- **NISALAH** — 99.99%
-- **GRAND DOLPHIN** — 98.48%
+- **Vessel B**: `>99.9%` calibrated probability
+- **Vessel A**: 98%
 
-(Unchanged from the six-vessel build: the same two vessels get the same two oil
-tiles under the same seed.)
-
-Both are real classifier outputs on real SAR tiles, and both are confident. Say
-plainly what that does and does not mean: these tiles come from the dataset the
-model was trained on, so this shows the pipeline working end to end - it is not
-evidence the detector is 99% accurate. The held-out figure is under *Questions you
-should expect*.
-
-Note what has *not* appeared: no source, no suspects, no forecast. A detection is
-a fact; everything else is an inference, and the interface will not assert them
-until asked.
+Both are real classifier outputs on real SAR tiles. Say plainly what that does and does
+not mean. These tiles come from the same public dataset the model was trained on, so this
+shows the pipeline working end to end. It is **not** evidence that the detector is 99%
+accurate. The held-out figure is under *Questions you should expect*.
 
 ## 4. Walk the investigation (90 s)
 
-The findings are already on screen — the models run the moment a pass lands, and
-pretending otherwise would be theatre. What the investigation bar shows is the
-pipeline that ran; click **HOW THIS WAS DERIVED** for the five stages with their
-limits in full. Read the second line under each stage — they are the point of the
-whole design.
+The models run the moment a pass lands, so the findings are already on screen. Click
+**How this was derived** for the five stages, and read the second line under each one.
+Those lines are the point of the whole design.
 
-- **CHARACTERIZATION** — Max age **4 h**. The previous pass was clear, so the oil
-  is at most one revisit old. *Derived from cadence, not measured from imagery.*
-- **HINDCAST** — Probable source **28.497, −94.832**, released ~**17:39 UTC**.
-  The amber line and marker appear on the map. *Kinematic, along an assumed
-  vector — no wind, current or wave feed is connected.*
-- **AIS SEARCH** — **360 fixes** in the window, **16.7 km** radius. *Filtered
-  against an estimated source and an estimated window; both carry the hindcast's
-  error.*
-- **CANDIDATES** — eleven vessels ranked.
+- **Characterization:** maximum age **4 h**. The previous pass was clear, so the oil is at
+  most one pass interval old. *Derived from cadence, not measured from imagery.*
+- **Hindcast:** probable source **28.497, −94.832**, released around **17:39 UTC**. *This is
+  kinematic, along an assumed vector. No measured wind or current is loaded.*
+- **AIS search:** 360 fixes in the window and a **16.7 km** radius. *Both the source and the
+  window are estimates.*
+- **Candidates:** eleven vessels ranked.
 
-Point at the funnel row: **347 vessels in the AIS corpus → 12 monitored → 12 with
-AIS in the release window → 11 within 16.7 km**. On the *second* detection that
-last step drops to 5, rejecting 7. The radius is three drift-envelope radii, not
-a round number someone picked — and until this build it was a flat 50 km, which
-over a 21 × 38 km patch rejected nobody at all.
+The radius is three drift-envelope radii, not a round number. On the second detection it
+rejects 7 of 12 vessels.
 
-If someone asks about the drift envelope: **5.6 km radius, 98 km²** is the sea
-area the oil could have reached. It is **not** the size of the slick. The
-classifier produces no mask, so no slick area exists. This is the strongest
-honesty point in the demo — do not skip it.
+If someone asks about the envelope: **5.58 km radius, 97.7 km²** is the sea area the oil
+could have reached. It is **not** the size of the slick. The classifier produces no mask,
+so no slick area exists. This is the strongest honesty point in the demo, so do not skip
+it.
 
 ## 5. Why this vessel? (60 s)
 
-Scroll to **WHY THIS VESSEL?** and click **MR CANOPUS** (the top-ranked candidate):
+In **Top candidates**, select **Vessel K**, the top-ranked vessel:
 
 ```
-PROXIMITY  × 0.40   88.37   contributes 35.35  ·  closest 1.95 km
-TRAJECTORY × 0.30   72.84   contributes 21.85  ·  Approaching source
-BEHAVIOUR  × 0.30   97.47   contributes 29.24  ·  Isolation Forest flagged 1 AIS fix
-88.37 × 0.40 + 72.84 × 0.30 + 97.47 × 0.30 = 86.44
+Proximity   88.4 · 40% weight      closest approach 1.95 km at 16:32 UTC
+Trajectory  72.8 · 30% weight      approaching source
+Behaviour   97.5 · 30% weight      Isolation Forest flagged 1 AIS fix
+0.40 × 88.37 + 0.30 × 72.84 + 0.30 × 97.47 = 86.44
 ```
 
-The behaviour term is the Isolation Forest's own verdict on that vessel's real
-track. Say the wording deliberately: *analytical association, not proof of
-responsibility.*
-
-Worth pointing out: **SAKAKA's trajectory term is 0.00** — a real measured zero,
-drawn as a normal empty bar. If a term had come back with no verdict at all it
-would be hatched and labelled instead. The interface does not let "no answer"
-look like "zero".
-
-If asked why these scores differ from earlier recordings of this demo: the behaviour
-model was retrained. AIS "not available" codes (102.3 knots, course 360) no longer
-count as behaviour, and the 0-100 scale is now a fixed calibration. Only the
-behaviour term moves; proximity and trajectory are the same arithmetic. Behaviour is
-a vessel's *maximum* calibrated score, so a few vessels sit at or near 100.
+The behaviour term is the Isolation Forest's own verdict on that vessel's real track. Say
+the wording deliberately: *analytical association, not proof of responsibility.*
 
 ## 6. The strongest moment: test it (90 s)
 
-The ranking's **#1 is MR CANOPUS at 86.4**, with NISALAH second at 73.5 and
-VESSEL 219025316 third at 72.7. A clear leader - but the ranking only says who was
-nearby and behaving oddly, not whether that vessel's oil could have reached the
-slick. So test them.
+The ranking only says who was nearby and moving unusually. It does not say whether that
+vessel's oil could have reached the slick. So test it. Click **Test source consistency**
+for each:
 
-Click **WHAT IF … CAUSED THE SPILL?** on each:
-
-| Ranked | Vessel | Score | Counterfactual |
+| Rank | Vessel | Score | Counterfactual (threshold 6.00 km) |
 |---|---|---|---|
-| #1 | MR CANOPUS | 86.4 | **2.88 km — CONSISTENT** |
-| #2 | NISALAH | 73.5 | **4.37 km — CONSISTENT** |
-| #3 | VESSEL 219025316 | 72.7 | 9.15 km — not consistent |
-| #4 | **ACHILLEAS** | 68.8 | **3.82 km — CONSISTENT** |
+| #1 | Vessel K | 86.4 | **2.88 km, consistent** |
+| #2 | Vessel B | 73.5 | **4.37 km, consistent** |
+| #3 | Vessel H | 72.7 | 9.15 km, not consistent |
+| #4 | **Vessel L** | 68.8 | **3.82 km, consistent** |
 
-**Two things to dwell on.**
+There are two things to dwell on:
 
-First, the third-ranked vessel is ruled out while the **fourth-ranked one is not**.
-The ranking asks *was it nearby and behaving oddly?*; the counterfactual asks
-*would its oil actually have ended up where the oil is?* Two different questions,
-and an instrument that only ever agreed with itself would not be worth much.
+1. **The third-ranked vessel is ruled out while the fourth-ranked one is not.** The
+   ranking asks *was it nearby and moving oddly?* The counterfactual asks *would its oil
+   have ended up where the oil is?* They are different questions.
+2. **The verdict rests on an assumption.** Vessel K is consistent by 3.12 km under the
+   kinematic drift, but by only **0.06 km** under the environment-derived drift. Under that
+   drift, **Vessel L ranks first instead of Vessel K**. The evidence assessment calls this
+   *leading candidate unstable*.
 
-Second, of eleven candidates only **three** are physically consistent. That is
-the filter doing its real work — narrowing eleven plausible-looking vessels to
-three.
-
-Then select **GRAND DOLPHIN's** spill in RESPONSE PRIORITY. The banner above the
-ranking reads **NO STRONG CANDIDATE — 0 of 5 candidates consistent with the
-observation**, and explains that GRAND DOLPHIN's 50.17 measures proximity,
-trajectory and behaviour but does not test whether its oil would have reached
-the slick — and that here that test fails for all five.
-
-The ranked list stays below it with its scores intact, so a judge can see the
-50.17 *and* see why it is not support. The closing line is the one to read out:
-*that is a statement about the evidence, NOT a finding that any vessel is
+Then select **Vessel A's** spill in **Response priority**. None of its five candidates is
+consistent with the observation under either drift. The report states *no strong
+candidate*, even though the ranking still shows a leader at 50.17. Read out the closing
+line: *that is a statement about the evidence, NOT a finding that any vessel is
 innocent.*
 
-This is the most valuable screen in the demo. Two detections on one pass: one
-where a leader exists but is not stable, one where the system refuses to name
-anyone.
-
-Note the colours: consistency is amber, ruling a vessel out is green. Clearing a
-vessel is a successful test, not a failure.
-
-## 6b. What the answer rests on (60 s)
-
-Three panels, in this order, are the difference between a ranking and an
-investigation.
-
-**Under each counterfactual, one line of robustness.** MR CANOPUS is consistent
-— but by **0.06 km** under the environment-derived drift, against 3.12 km under
-the shipped one. Same verdict, completely different confidence. Say it plainly:
-*this verdict is resting on an assumption nobody measured.*
-
-**The DRIFT ASSUMPTION strip.** The system carries three drift vectors and they
-disagree: the estimated source moves **4.56 km**, the forecast horizons up to
-**18.98 km**, and re-ranking the same fleet against the environment-aware source
-**puts ACHILLEAS first instead of MR CANOPUS**. If someone asks whether that is
-the environmental data doing something — no. **No environmental dataset is
-loaded.** It is three constants disagreeing with each other, and the panel says
-so twice.
-
-**EVIDENCE QUALITY, inside each candidate.** Five streams graded on one axis:
-*how much can this stream tell us*, never *how guilty is this vessel*. That is
-why `UNAVAILABLE` sits outside the red-to-green scale rather than at the bottom
-of it — a behaviour model that could not run is not evidence a vessel behaved
-normally. On this demo every candidate's environmental stream is `UNAVAILABLE`,
-and **IN PLAIN TERMS** says so in a sentence rather than leaving it out.
-
-If you have time for one sentence here, use this one: *the system is designed to
-be able to tell you it does not know.*
+If you have time for one sentence, use this one: *the system is designed to be able to
+tell you it does not know.*
 
 ## 7. Respond (45 s)
 
-**VESSELS AT RISK** now shows three vessels projected to enter — ACHILLEAS
-(~0 min), MR CANOPUS (~35 min) and HARVEY HERD (~105 min). Select **HARVEY HERD**
-and the recommendation appears; **OPTIMIZE ROUTE** draws it on the map:
+**Recommended actions** lists investigate, alert, contain and verify. The verify step asks
+for inspection and oil sampling: *the ranking alone is not grounds for detention.*
 
-- Heading **87° → 76° (−11°)**
-- Distance **63.46 → 63.98 km (+0.52)**
-- 3.0 km safety buffer · **CLEARS THE ZONE**
+**Vessels at risk** shows which vessels are projected to enter a risk zone within 6 h.
+Across both spills there are three: Vessel L (already inside), Vessel K (about 35 min)
+and Vessel C (about 105 min). Select **Vessel C** and press **Optimize route**:
 
-The green detour draws on the map. Label it: *simulated route avoidance, not
-maritime navigation guidance* — no traffic separation, depth, weather or COLREGs.
+- Heading **87° → 75° (−12°)**
+- Distance **63.46 → 64.05 km (+0.59)**
+- 3.0 km safety buffer · **clears the zone**
+
+Label it: *simulated route, requires navigation review*. It ignores traffic separation,
+depth, weather and COLREGs.
 
 ## 8. Replay (45 s)
 
-Click **PLAY INCIDENT**. The timeline runs T1 → detection → +12 h, with the
-vessels moving along their real AIS tracks.
-
-Watch the band under the scrubber change:
-
-- **OBSERVED · no oil detected yet** — real AIS, nothing inferred
-- **ESTIMATED · hindcast** — the slick is back-derived; nobody saw oil there
-- **OBSERVED · satellite detection** — the one moment the oil was measured
-- **PROJECTED · kinematic forecast** — past the last AIS fix and past the pass
-
-A vessel past its last AIS fix goes hollow and dashed. The slick is dashed unless
-it is the measured pass. Animating never makes an estimate look like an
-observation.
-
-The +24 h and +48 h horizons are listed in **WHERE THIS OIL GOES NEXT** rather
-than replayed, so the observed window stays legible on the scrubber.
+Press **Play timeline**. The incident runs from T1 through the detection to the forecast,
+with vessels moving along their real AIS tracks. The bands under the scrubber separate
+what was **observed** (AIS, and the one satellite detection), what was **estimated** (the
+hindcast) and what is **projected** (the forecast). A vessel past its last AIS fix is drawn
+hollow. Animation never makes an estimate look like an observation.
 
 ## 9. Report (30 s)
 
-**Report** → the printable document: the five stages with their limits, the full
-score arithmetic, **every counterfactual that was run including the one that
-cleared a vessel**, the reroute, and provenance. Print / Save PDF works.
-
-Say why the exculpatory result is in there: a report that only kept the
-incriminating tests would be a case for the prosecution, not an instrument.
+**Report** opens the printable record. It contains the stages with their limits, the score
+arithmetic, **every counterfactual that was run, including the ones that cleared a
+vessel**, the evidence assessment, the reroute and the provenance. Explain why the
+exculpatory results are kept: a report that only kept incriminating tests would be a case
+for the prosecution, not an instrument.
 
 ## Questions you should expect
 
-**"Why no spill area?"** The classifier outputs one number. Area needs
-segmentation, which is a different model we have not trained. We show the drift
-envelope and label it as such.
+**"Why no spill area?"** The classifier outputs one number per tile. Area needs a
+segmentation model, which we have not trained. We show the drift envelope and label it as
+such.
 
-**"How accurate is the detector?"** On 574 tiles from 451 satellite scenes it never saw:
-96.3% accuracy, 94.3% precision, 94.8% recall, ROC-AUC 0.993. Roughly one alarm in 18 is
-false and one spill in 19 is missed. Say "about 95%" rather than "96.3%": the 95% interval
-on recall alone is 90.7-98.1%. The test split is grouped by scene, so no scene that trained
-the model is in it.
+**"How accurate is the detector?"** On 574 tiles from 451 satellite scenes it never saw, it
+reaches 96.3% accuracy, 94.3% precision, 94.8% recall and ROC-AUC 0.993. Roughly one
+alarm in 18 is false and one spill in 19 is missed. Say "about 95%": the 95% interval on
+recall is 90.7–98.1%. The split is grouped by scene. A perceptual-hash audit found 58 test
+tiles that look like training tiles; removing them leaves accuracy at 96.1%.
 
 **"Is the demo itself proof that it works?"** No, and say so first. The demo's tiles come
-from the same public dataset the model was trained on - most of the bundled ones were in
-its training split - so the confident detections you just saw are not a held-out
-measurement. The 574-tile result above is the measurement.
+from the training dataset. The 574-tile result is the measurement.
 
-**"Are the ships real?"** Yes — real MMSIs and real AIS tracks; four are unnamed
-in the corpus and shown as such. Two things are constructed: which of them gets
-an oily tile on t3 (seeded, made before any model runs, never shown to the CNN),
-and that they are at sea simultaneously — the corpus samples transits, so their
-timestamps are shifted onto a shared clock. Positions are never altered.
+**"Are the ships real?"** The tracks are real AIS, shown under pseudonyms. Two things are
+constructed: which vessels get an oily tile on T3 (a seeded draw made before any model
+runs) and their simultaneity (timestamps shifted onto a shared clock). Positions are never
+altered.
 
-**"Why not just use vessels that were actually there together?"** We measured
-that. Across the whole 88-day corpus, at most four vessels are simultaneously
-live at any instant, whatever pass interval you pick. Unshifted, ten of our
-twelve would not have arrived by t1 and eleven would be hours stale by t3. The
-shift is what makes a fleet observable from transit samples.
+**"Why the Gulf of Mexico?"** No open AIS corpus has Indian coastal traffic at this
+density. The method is region-agnostic. The paper sets out a roadmap for Indian waters:
+Sentinel-1 over the Arabian Sea, INCOIS currents, IMD winds and Coast Guard workflows.
 
-**"Why the Gulf of Mexico?"** No open AIS corpus has Indian-flag traffic at this
-density. The method is region-agnostic; pointed at Indian coastal AIS it runs
-unchanged.
+**"Does this prove who did it?"** No, and the system never claims to. It narrows a search
+from a whole fleet to the vessels that were plausibly present, tests each of them, and
+reports when the test disagrees with the ranking.
 
-**"Does this prove who did it?"** No, and the system never claims to. It narrows
-a search from a whole fleet to the vessels that were plausibly present, then
-tests each of them and reports when the test disagrees with the ranking.
-
-**"Is the drift physics real?"** No. Three fixed vectors, all stated. The
-counterfactual uses the hindcast's vector so it is a true inverse — which also
-means it inherits that assumption rather than checking it.
+**"Is the drift physics real?"** It is a stated first-order approximation: current plus 3%
+windage, with fixed inputs. There are three vectors, and how much they disagree is reported
+on every scan. A gridded reanalysis can replace the fixed inputs without a code change.
 
 ## Fallback, if the backend dies mid-demo
 
-The dashboard falls back to the stored result and the badge changes to **STORED
-RESULT**. It keeps working. Nothing is presented as live when it is not.
+The dashboard falls back to the stored result, and the badge changes to **Stored result**.
+It keeps working. Nothing is presented as live when it is not.

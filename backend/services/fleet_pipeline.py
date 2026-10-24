@@ -53,6 +53,22 @@ DEFAULT_PASS_INTERVAL_HOURS = 8
 _CORPUS_VESSELS = None
 
 
+def display_probability(p, digits=1):
+    """A probability as a percentage that never rounds up to certainty.
+
+    0.99988 printed as "100.0%" reads as a guarantee the classifier cannot give;
+    it is shown as ">99.9%" instead (and a tiny one as "<0.1%"). The value
+    itself is untouched — only its text.
+    """
+    step = 10 ** -digits
+    pct = p * 100
+    if pct < 100 and round(pct, digits) >= 100:
+        return f">{100 - step:.{digits}f}%"
+    if pct > 0 and round(pct, digits) <= 0:
+        return f"<{step:.{digits}f}%"
+    return f"{pct:.{digits}f}%"
+
+
 def corpus_vessel_count():
     """
     Distinct MMSIs in the AIS corpus. Read once and cached — this is a fact
@@ -1043,7 +1059,8 @@ def run_fleet_scan(snapshot_id=None):
         **base,
         "status": "SPILL_DETECTED",
         "message": (f"Oil signature detected near {top['name']} in pass "
-                    f"{scan['snapshot_id']} at {top['confidence'] * 100:.1f}% confidence."),
+                    f"{scan['snapshot_id']} at {display_probability(top['confidence'])} "
+                    f"calibrated probability."),
         "spill": spill,
         "spills": spills,
         "age": primary["age"],

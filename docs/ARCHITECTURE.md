@@ -145,7 +145,10 @@ envelope the assumed current plus 3% windage (1.394 km/h toward 181.2°). The
 counterfactual must use the hindcast's, run forward, or it is not the inverse of
 the source estimate it is testing against — with any other vector a vessel
 sitting exactly on the estimated source would fail to reproduce the observation.
-Unifying the three is real work that has not been done.
+The two kinematic vectors are fixed scenario constants from the original notebook. They
+are kept alongside the environment-derived one on purpose, so that each scan can report
+how much its answer depends on which assumption is used (next paragraph). Replacing all
+three with a measured field is a data task: drop a grid into `data/environment/`.
 
 **How far apart they actually are, measured.** `services/drift.py` integrates
 the same question through the environment service's vector — the one the stated
@@ -167,12 +170,12 @@ UNAVAILABLE. Every grade ships the threshold rule that produced it.
 
 Three detection outcomes, and t3 produces two of them:
 
-- **`NO_STRONG_CANDIDATE`** on the GRAND DOLPHIN detection. All five candidates'
+- **`NO_STRONG_CANDIDATE`** on the Vessel A detection. All five candidates'
   counterfactuals robustly say they could not have been the source, while the
-  ranking still shows a leader at **50.17/100**. The banner says nobody is
-  supported and explains why that score does not amount to support; the ranked
-  list stays below it with scores intact.
-- **`LEADING_CANDIDATE_UNSTABLE`** on the NISALAH detection. Three candidates are
+  ranking still shows a leader at **50.17/100**. The assessment says nobody is
+  supported and explains why that score does not amount to support. The ranked
+  list stays visible with its scores intact.
+- **`LEADING_CANDIDATE_UNSTABLE`** on the Vessel B detection. Three candidates are
   consistent, but which one leads changes with the drift assumption and the
   leader's verdict holds by 0.06 km under the environment-aware drift.
 - `CANDIDATE_SUPPORTED` otherwise.
@@ -190,26 +193,26 @@ toned `supports` / `weakens` / `missing` / `neutral`. Two rules shape it:
   simply says nothing about the environment reads as though the environment were
   fine. A test asserts this by removing streams, not by inspection.
 - **The opening is set by the detection outcome, not the rank.** On the
-  `NO_STRONG_CANDIDATE` detection, opening "Ranked #1 because…" for GRAND DOLPHIN
+  `NO_STRONG_CANDIDATE` detection, opening "Ranked #1 because…" for Vessel A
   would be the accusation the system declined to make one panel earlier. There it
   opens: *"ranks #1 … but on this detection no vessel's oil could have reached
   where oil was actually seen, this one included."*
 
 It lives in the backend for the same reason the model statements and the grade
-reasons do — one place to correct the wording — and so Phase 19's report reuses
-the sentences rather than restating them.
+reasons do: there is one place to correct the wording, and the report reuses the
+sentences rather than restating them.
 
 **The drift assumption changes who is ranked first, and the app says so.**
 `drift_divergence.ranking_change` re-runs the existing `rank_fleet()` against
 the environment-aware source — same fleet, same search radius, same behaviour
-scores, only the estimated source moves. On the t3 case the first detection's
-top candidate changes (**MR CANOPUS #1 → #3, NISALAH #2 → #1, ACHILLEAS
-#6 → #2**) while the second detection's does not (GRAND DOLPHIN stays #1). The
-DRIFT ASSUMPTION strip headlines that, framed as a sensitivity of the
-attribution to an assumption nobody measured — the same class of thing the
-per-candidate robustness line reports — rather than as a fault. The shipped
-ranking is the legacy one; the comparison is parallel and a test pins that the
-real candidate list is untouched by it.
+scores, only the estimated source moves. On the T3 case the first detection's
+top candidate changes (**Vessel L #4 → #1, Vessel K #1 → #2, Vessel B #2 → #3**),
+while the second detection's does not (Vessel A stays #1). The payload and the
+evidence assessment present this as a sensitivity of the attribution to an
+assumption nobody measured, the same kind of result the per-candidate robustness
+sweep reports, rather than as a fault. The shipped ranking is the legacy one. The
+comparison runs in parallel, and a test pins that the real candidate list is
+untouched by it.
 
 **Both drift paths are computed; only the legacy one drives anything.**
 `spills[].source` / `.forecast` are the legacy fixed-vector estimates and still
@@ -260,11 +263,12 @@ because a vessel's track is the same whichever spill it is ranked against.
 
 The dashboard degrades rather than failing:
 
-1. `POST /fleet/scan` — both models run now. Badge: **LIVE INFERENCE**
-2. `GET /ai-result` — the stored completed case. Badge: **STORED RESULT**
-3. `/ai-data/oiltrace_ai_output_final.json` — same output bundled with the frontend
+1. `POST /fleet/scan`: both models run now (live inference).
+2. `GET /ai-result`: the stored completed case. Badge: **Stored result**.
+3. `/ai-data/oiltrace_ai_output_final.json`: the same output, bundled with the frontend.
 
-The badge always names the tier in use. A stored result is never presented as a
+The footer badge always names the tier and data basis in use (for example *Recorded
+AIS · aligned scenario*). A stored result is never presented as a
 live one.
 
 ## Frontend
@@ -275,17 +279,20 @@ module:
 | File | Owns |
 |---|---|
 | `components/MapView.tsx` | The Leaflet map and every overlay, docked or full-window. |
-| `components/EnvironmentLayer.tsx` | The drift field, as arrows. Off by default; badged uniform when no dataset is loaded. |
-| `components/DriftComparison.tsx` | Legacy vs environment-aware: source, forecast horizons, the three vectors, and the ranking change. |
-| `components/EvidenceQuality.tsx` | Per-candidate stream grades, each with the rule that produced it. |
-| `components/OutcomeBanner.tsx` | Whether the evidence supports naming anyone, stated above the ranking. |
-| `components/CandidateNarrative.tsx` | Renders the backend's beats; a `missing` beat is styled as prominently as a supporting one. |
-| `components/CounterfactualLines.tsx` | The mode-comparison and robustness lines, moved out of `WhyThisVessel.tsx`. |
-| `components/DemoMode.tsx` | The thirteen-step guided run. Scrolls to and outlines real panels; duplicates none of them. |
-| `components/InvestigationBar.tsx` | The five stages and the step rail. |
-| `components/WhyThisVessel.tsx` | Candidate ranking, score breakdown, counterfactual. |
-| `components/ReportModal.tsx` | The printable report. |
-| `lib/oiltrace.ts` | All data access. Components never call `fetch` directly. |
+| `components/EnvironmentLayer.tsx`, `EnvironmentVectors.tsx` | The drift field as arrows, and the wind/current/drift dials. Badged uniform when no dataset is loaded. |
+| `components/ThermalHeatmapLayer.tsx` | Source and forecast heatmaps (wraps the third-party `leaflet.heat`). |
+| `components/ReplayBar.tsx` | The T1 → +48 h timeline: before, estimated, observed and projected bands. |
+| `components/PassControls.tsx`, `PassUploader.tsx` | Pass selection, and uploading a new pass of SAR tiles. |
+| `components/VesselDetail.tsx` | The selected vessel: SAR tile, CNN result, suspect score, AIS fix, conditions at the spill. |
+| `components/CandidateList.tsx`, `EvidencePanel.tsx` | Ranked candidates, the score breakdown, and the counterfactual action. |
+| `components/ResponsePriorityStrip.tsx` | Relative triage of live spills. |
+| `components/VesselsAtRiskStrip.tsx` | Forward risk and the simulated detour. |
+| `components/GovernmentActions.tsx` | Recommended actions. The ranking is an investigation lead, never grounds for detention. |
+| `components/FlowModal.tsx` | "How this was derived": the five stages and their limits. |
+| `components/ModelInfoModal.tsx` | Model cards from `GET /api/models`. |
+| `components/ReportModal.tsx` | The printable report, including the evidence assessment and narrative. |
+| `components/ModalFrame.tsx`, `hooks/usePanel.ts` | Shared modal shell, and panel state kept in the URL. |
+| `lib/oiltrace.ts` | All data access and value formatting. Components never call `fetch` directly. |
 | `lib/replay.ts` | Timeline interpolation. Pure functions. |
 | `types.ts` | Scan payload shapes. |
 | `stages.ts` | The five stages, each with what it establishes and what it does not. |
@@ -301,9 +308,9 @@ named by role instead (`spill`, `hindcast`, `forecast`, `counterfactual`), which
 is what makes an accidental reuse visible; the legend swatches read the same
 constants, so the key cannot drift from the map.
 
-Layout: fleet list and forecast on the left, map centre, selected-vessel detail
-on the right, and full-width strips below for attribution, response priority and
-forward risk.
+Layout: fleet list and forecast on the left, the map in the centre, selected-vessel
+detail on the right, and full-width strips below for candidates, response priority,
+recommended actions, environmental impact and forward risk.
 
 ## Extending it
 

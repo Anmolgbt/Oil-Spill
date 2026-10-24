@@ -1,0 +1,47 @@
+{
+  "method": "64-bit DCT pHash, 8 orientations, near-duplicate if Hamming <= 8 (strict <= 4)",
+  "n_tiles": 5536,
+  "partitions": {
+    "val": {
+      "tiles": 553,
+      "near_duplicates_of_train": 52,
+      "near_duplicates_of_train_strict": 9,
+      "exact_hash_matches": 5,
+      "scenes_affected": 49
+    },
+    "test": {
+      "tiles": 574,
+      "near_duplicates_of_train": 58,
+      "near_duplicates_of_train_strict": 7,
+      "exact_hash_matches": 1,
+      "scenes_affected": 52
+    }
+  },
+  "frozen_model_on_test": {
+    "all_tiles": {
+      "n": 574,
+      "accuracy": 0.9634146341463414,
+      "precision": 0.9432989690721649,
+      "recall": 0.9481865284974094,
+      "f1": 0.9457364341085271,
+      "roc_auc": 0.9933499245236832,
+      "tn": 370,
+      "fp": 11,
+      "fn": 10,
+      "tp": 183
+    },
+    "without_train_near_duplicates": {
+      "n": 516,
+      "accuracy": 0.9612403100775194,
+      "precision": 0.9418604651162791,
+      "recall": 0.9418604651162791,
+      "f1": 0.9418604651162791,
+      "roc_auc": 0.9930367766360194,
+      "tn": 334,
+      "fp": 10,
+      "fn": 10,
+      "tp": 162
+    },
+    "matches_reported_confusion_matrix": true
+  }
+}

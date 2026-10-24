@@ -32,10 +32,10 @@ def _narrative(scan, spill_index, name):
 
 def test_the_top_vessel_on_a_weak_detection_is_not_accused(t3):
     """
-    GRAND DOLPHIN leads a detection where every counterfactual rules everyone
+    Vessel A leads a detection where every counterfactual rules everyone
     out. The narrative must not read as "ranked #1, therefore suspect".
     """
-    n = _narrative(t3, 1, "GRAND DOLPHIN")
+    n = _narrative(t3, 1, "Vessel A")
     opening = n["beats"][0]
 
     assert opening["tone"] == WEAKENS
@@ -46,7 +46,7 @@ def test_the_top_vessel_on_a_weak_detection_is_not_accused(t3):
 
 
 def test_the_unstable_leader_is_framed_as_a_starting_point(t3):
-    n = _narrative(t3, 0, "MR CANOPUS")
+    n = _narrative(t3, 0, "Vessel K")
     opening = n["beats"][0]
 
     assert "where to start looking, not as an answer" in opening["text"]
@@ -61,8 +61,8 @@ def test_an_unavailable_stream_changes_its_sentence_rather_than_vanishing(t3):
     streams are removed one at a time and the beat count must not drop.
     """
     spill = t3["spills"][0]
-    graded = {g["name"]: g for g in spill["evidence"]["candidates"]}["MR CANOPUS"]
-    candidate = next(c for c in spill["candidates"] if c["name"] == "MR CANOPUS")
+    graded = {g["name"]: g for g in spill["evidence"]["candidates"]}["Vessel K"]
+    candidate = next(c for c in spill["candidates"] if c["name"] == "Vessel K")
     full = build(candidate, graded["streams"], "CANDIDATE_SUPPORTED", True)
 
     for stream in ("ais_coverage", "trajectory", "behaviour"):
@@ -116,8 +116,8 @@ def test_every_narrative_carries_the_no_causation_disclaimer(t3):
 def test_a_strongly_supported_candidate_reads_as_supported(t3):
     """A consistent candidate on a stable detection collects supporting beats."""
     spill = t3["spills"][0]
-    candidate = next(c for c in spill["candidates"] if c["name"] == "ACHILLEAS")
-    graded = {g["name"]: g for g in spill["evidence"]["candidates"]}["ACHILLEAS"]
+    candidate = next(c for c in spill["candidates"] if c["name"] == "Vessel L")
+    graded = {g["name"]: g for g in spill["evidence"]["candidates"]}["Vessel L"]
     n = build(candidate, graded["streams"], "CANDIDATE_SUPPORTED", True)
 
     assert n["beats"][0]["tone"] == SUPPORTS

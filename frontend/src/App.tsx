@@ -105,7 +105,7 @@ function App() {
         ...stored,
         status: det.oil_detected ? "SPILL_DETECTED" : "CLEAR",
         message: `Stored completed case — ${det.prediction ?? "result"} at ` +
-                 `${det.confidence != null ? (det.confidence * 100).toFixed(2) + "%" : "unknown"} confidence. ` +
+                 `${det.confidence != null ? showPct(det.confidence) : "unknown"} calibrated probability. ` +
                  "Live scan unavailable.",
         fleet: [],
         scanned: 0,

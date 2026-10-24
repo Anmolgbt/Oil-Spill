@@ -23,3 +23,20 @@ backend/data/simulation/snapshots/*/
 !backend/data/simulation/snapshots/t1/
 !backend/data/simulation/snapshots/t2/
 !backend/data/simulation/snapshots/t3/
+
+# Third-party datasets are fetched, never committed (see DATA_LICENSES.md).
+_oiltrace_repo/
+**/SAR Image Dataset/
+
+# LaTeX build output (the paper is compiled on Overleaf or with latexmk).
+paper/*.aux
+paper/*.bbl
+paper/*.blg
+paper/*.log
+paper/*.out
+paper/*.fls
+paper/*.fdb_latexmk
+paper/*.synctex.gz
+
+# Packaged copy of the paper for Overleaf upload (rebuilt from the sources above).
+paper/oiltrace_overleaf.zip

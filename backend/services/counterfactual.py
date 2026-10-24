@@ -450,7 +450,7 @@ def _mode_comparison(legacy_miss_km, legacy_radius_km, env):
     and the MARGINS invert. The shipped top candidate goes from 2.70 km inside
     its threshold to 0.05 km inside — consistent either way, but by fifty metres
     rather than by nearly three kilometres. And the vessel that best reproduces
-    the observation changes (MR CANOPUS legacy, ACHILLEAS environment-aware).
+    the observation changes (Vessel K legacy, Vessel L environment-aware).
 
     Reporting only "both say consistent" would hide all of that, which is why
     the margin travels with the verdict.

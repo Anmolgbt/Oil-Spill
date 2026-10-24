@@ -3,7 +3,7 @@ Evidence quality, and the system's ability to decline to name anyone.
 
 The case this layer exists for is already in the shipped demo, and both of the
 interesting outcomes appear on the same pass — so both are pinned here. If a
-future change quietly turns the GRAND DOLPHIN detection back into a confident
+future change quietly turns the Vessel A detection back into a confident
 accusation, this file fails.
 
 The load-bearing distinction throughout: a grade says HOW MUCH A STREAM CAN TELL
@@ -32,7 +32,7 @@ def test_the_weak_detection_declines_to_name_anyone(t3):
     assert assessment["consistent_count"] == 0
     assert assessment["candidate_count"] == 5
     # The score is not hidden — it is explained.
-    assert assessment["leader"]["name"] == "GRAND DOLPHIN"
+    assert assessment["leader"]["name"] == "Vessel A"
     assert assessment["leader"]["counterfactual_consistent"] is False
     assert any("50.17" in r for r in assessment["reasons"])
     # And declining to name is about evidence, not innocence.
@@ -49,7 +49,7 @@ def test_the_unstable_detection_is_not_flattened_into_supported(t3):
 
     assert assessment["outcome"] == "LEADING_CANDIDATE_UNSTABLE"
     assert assessment["consistent_count"] == 3
-    assert any("MR CANOPUS" in r and "ACHILLEAS" in r for r in assessment["reasons"]), \
+    assert any("Vessel K" in r and "Vessel L" in r for r in assessment["reasons"]), \
         "the rank flip must be one of the stated reasons"
     assert any("0.06 km" in r for r in assessment["reasons"]), \
         "the thin margin must be one of the stated reasons"
@@ -57,12 +57,12 @@ def test_the_unstable_detection_is_not_flattened_into_supported(t3):
 
 def test_the_leaders_counterfactual_grade_reads_the_thinner_of_the_two_modes(t3):
     """
-    MR CANOPUS holds its legacy verdict by 3.12 km of 6.00 and its
+    Vessel K holds its legacy verdict by 3.12 km of 6.00 and its
     environment-aware one by 0.06 km of 5.59. Reading only the legacy margin
     would grade it MEDIUM and miss the fragility entirely.
     """
     graded = {g["name"]: g for g in t3["spills"][0]["evidence"]["candidates"]}
-    cf = graded["MR CANOPUS"]["streams"]["counterfactual"]
+    cf = graded["Vessel K"]["streams"]["counterfactual"]
 
     assert cf["grade"] == LOW
     assert cf["margin_km"] == pytest.approx(3.12, abs=0.01)          # legacy
@@ -101,7 +101,7 @@ def test_trajectory_reads_score_and_status_together(t3):
     """
     A vessel that closed on the source and then left scores high while its
     status says "moving away". Reading either field alone misreports it — on t3
-    GRAND DOLPHIN does exactly this at 92.35.
+    Vessel A does exactly this at 92.35.
     """
     passed_by = grade_trajectory(92.35, "Moving away / not approaching")
     assert passed_by["grade"] == MEDIUM
@@ -125,7 +125,7 @@ def test_the_evidence_layer_does_not_touch_the_ranking(t3):
     """It reads the ranking. A layer that reordered what it describes would be
     describing itself."""
     assert [c["rank"] for c in t3["spills"][0]["candidates"]] == list(range(1, 12))
-    assert t3["spills"][0]["candidates"][0]["name"] == "MR CANOPUS"
+    assert t3["spills"][0]["candidates"][0]["name"] == "Vessel K"
     assert t3["spills"][0]["candidates"][0]["final_suspect_score"] == pytest.approx(86.44, abs=0.01)
     assert t3["spills"][0]["affected_area"]["radius_km"] == 5.58
     assert t3["spills"][1]["ais"]["funnel"]["within_radius"] == 5

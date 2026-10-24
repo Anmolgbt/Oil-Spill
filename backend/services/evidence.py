@@ -96,7 +96,7 @@ def grade_trajectory(trajectory_score, trajectory_status):
 
     Score and status answer different questions and can disagree: a vessel that
     closed on the source and then left scores high while its status reads
-    "moving away". On t3 GRAND DOLPHIN does exactly that at 92.35. Reading either
+    "moving away". On t3 Vessel A does exactly that at 92.35. Reading either
     field alone would misreport it, so both are used and the disagreement is
     named rather than resolved.
     """
@@ -289,10 +289,10 @@ def assess_detection(candidates, graded, consistent_mmsis, ranking_change=None):
     stable.
 
     Three states rather than two, because the shipped demo produces both of the
-    interesting ones. On the t3 GRAND DOLPHIN detection every candidate's
+    interesting ones. On the t3 Vessel A detection every candidate's
     counterfactual robustly says it could not have been the source, while the
     ranking still names a #1 at 70.54/100 — the system must be able to say that
-    nobody is supported. On the NISALAH detection candidates ARE consistent, but
+    nobody is supported. On the Vessel B detection candidates ARE consistent, but
     which one leads changes with the drift assumption, and flattening that into
     "supported" would hide a finding the previous two phases went to some length
     to measure.

@@ -28,8 +28,14 @@ export type InvestigationMode = "LIVE_INFERENCE" | "AI_RESULT";
 export const NOT_AVAILABLE = "Not available";
 export const show = (v: any, suffix = "") =>
   v === null || v === undefined || v === "" ? NOT_AVAILABLE : `${v}${suffix}`;
-export const showPct = (v: any, digits = 2) =>
-  typeof v === "number" ? `${(v * 100).toFixed(digits)}%` : NOT_AVAILABLE;
+/** A probability never rounds up to certainty: 0.99988 shows as ">99.9%", not "100%". */
+export const showPct = (v: any, digits = 2) => {
+  if (typeof v !== "number") return NOT_AVAILABLE;
+  const pct = v * 100, step = 10 ** -digits;
+  if (pct < 100 && Number(pct.toFixed(digits)) >= 100) return `>${(100 - step).toFixed(digits)}%`;
+  if (pct > 0 && Number(pct.toFixed(digits)) <= 0) return `<${step.toFixed(digits)}%`;
+  return `${pct.toFixed(digits)}%`;
+};
 export const showCoord = (v: any, digits = 5) =>
   typeof v === "number" ? v.toFixed(digits) : NOT_AVAILABLE;
 

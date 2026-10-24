@@ -33,16 +33,16 @@ def test_the_top_candidate_changes_on_the_first_detection(scan):
 
     assert change["available"] is True
     assert change["top_changes"] is True
-    assert change["legacy_top"] == "MR CANOPUS"
-    assert change["environmental_top"] == "ACHILLEAS"
+    assert change["legacy_top"] == "Vessel K"
+    assert change["environmental_top"] == "Vessel L"
 
     by_name = {r["name"]: r for r in change["rows"]}
-    assert by_name["MR CANOPUS"]["legacy_rank"] == 1
-    assert by_name["MR CANOPUS"]["environmental_rank"] == 2
-    assert by_name["ACHILLEAS"]["legacy_rank"] == 4
-    assert by_name["ACHILLEAS"]["environmental_rank"] == 1
+    assert by_name["Vessel K"]["legacy_rank"] == 1
+    assert by_name["Vessel K"]["environmental_rank"] == 2
+    assert by_name["Vessel L"]["legacy_rank"] == 4
+    assert by_name["Vessel L"]["environmental_rank"] == 1
     # The largest single move, and the one worth noticing.
-    assert by_name["GRAND DOLPHIN"]["rank_delta"] == 5
+    assert by_name["Vessel A"]["rank_delta"] == 5
 
 
 def test_the_second_detection_is_steady(scan):
@@ -52,7 +52,7 @@ def test_the_second_detection_is_steady(scan):
     """
     change = scan["spills"][1]["drift_divergence"]["ranking_change"]
     assert change["top_changes"] is False
-    assert change["legacy_top"] == change["environmental_top"] == "GRAND DOLPHIN"
+    assert change["legacy_top"] == change["environmental_top"] == "Vessel A"
 
 
 def test_a_vessel_outside_the_environmental_radius_is_dropped_not_zeroed(scan):

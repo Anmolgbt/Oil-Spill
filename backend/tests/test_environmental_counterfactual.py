@@ -68,7 +68,7 @@ def test_each_mode_is_judged_against_its_own_drift(t3):
     The correction. The legacy threshold is now the hindcast's own reach, not
     the map's circle, and the two are genuinely different numbers.
     """
-    r = _run(t3, 0, "MR CANOPUS")
+    r = _run(t3, 0, "Vessel K")
     assert r["consistency_radius_km"] == consistency_radius_km(4) == 6.0
     assert r["consistency_radius_km"] == HINDCAST_DRIFT_SPEED_KMH * 4
     # The map circle is still reported, and is still the other number.
@@ -100,8 +100,8 @@ def test_both_modes_agree_on_t3_while_the_margins_invert(t3):
     the shipped top candidate is consistent by 3.12 km one way and 0.06 km the
     other, and the vessel that best reproduces the observation changes.
     """
-    canopus = _run(t3, 0, "MR CANOPUS")
-    achilleas = _run(t3, 0, "ACHILLEAS")
+    canopus = _run(t3, 0, "Vessel K")
+    achilleas = _run(t3, 0, "Vessel L")
 
     for r in (canopus, achilleas):
         assert r["mode_comparison"]["verdicts_agree"] is True
@@ -112,14 +112,14 @@ def test_both_modes_agree_on_t3_while_the_margins_invert(t3):
     assert canopus["mode_comparison"]["legacy"]["margin_km"] == pytest.approx(3.12, abs=0.01)
     assert canopus["environmental"]["margin_km"] == pytest.approx(0.06, abs=0.01)
 
-    # Legacy says MR CANOPUS reproduces the observation best; the other way round
-    # it is ACHILLEAS. Neither is validated.
+    # Legacy says Vessel K reproduces the observation best; the other way round
+    # it is Vessel L. Neither is validated.
     assert achilleas["miss_distance_km"] > canopus["miss_distance_km"]
     assert achilleas["environmental"]["miss_distance_km"] < canopus["environmental"]["miss_distance_km"]
 
 
 def test_no_dataset_is_reported_as_an_assumption_not_a_measurement(t3):
-    env = _run(t3, 0, "MR CANOPUS")["environmental"]
+    env = _run(t3, 0, "Vessel K")["environmental"]
     assert env["environment_mode"] == "fallback"
     assert env["environment_reason"]
     assert "not a measured field" in env["note"]

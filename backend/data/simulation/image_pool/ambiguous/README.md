@@ -25,3 +25,7 @@ sometimes with a bright vessel return, and no slick-shaped dark region.
 
 Nothing reads this folder at runtime: `services/t3_simulation.py` globs
 `clean/*.jpg` and `oil/*.jpg` only, and does not recurse.
+
+Like every tile under `image_pool/`, these are chips from the CSIRO Sentinel-1 SAR
+oil/non-oil dataset (DOI 10.25919/4v55-dn16), redistributed under CC BY-SA 4.0. See
+[`DATA_LICENSES.md`](../../../../../DATA_LICENSES.md).

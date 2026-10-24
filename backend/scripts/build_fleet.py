@@ -48,9 +48,6 @@ from services.t3_simulation import CLEAN_POOL_DIR, write_t3_snapshot
 FLEET_FILE = SIMULATION_DIR / "fleet.json"
 SNAPSHOTS_DIR = SIMULATION_DIR / "snapshots"
 
-# Keep the monitored roster to vessels that the source corpus identifies by
-# name. The four anonymous records previously shown as "VESSEL <MMSI>" are
-# intentionally omitted from the walkthrough.
 FLEET_SIZE = 12
 # A real, historically busy patch of Gulf traffic. This is only used to pick a
 # CLUSTER out of the corpus — the vessels' own recorded coordinates, speed and
@@ -93,9 +90,9 @@ def min_source_separation_km():
 # so the walkthrough named every ship. They are now INCLUDED: unnamed AIS
 # records are a real and common feature of the data, and the search radius can
 # only be shown to reject irrelevant traffic if there is traffic to reject.
-# They appear as "VESSEL <MMSI>", which is what the corpus actually knows.
 # Spill sources are still drawn only from identified vessels (see
-# _pick_sources), so the demo still names a real, dimensioned vessel.
+# _pick_sources), so every spill has recorded dimensions. Every vessel is
+# displayed under a pseudonym (see pseudonym()).
 EXCLUDE_MMSI = {
     636017298,   # KIDAN
     367441520,   # CAPT NICHOLAS
@@ -529,9 +526,10 @@ def build_fleet():
         first_row = rows.iloc[0]
         ships.append({
             "id": f"ship{i}",
-            "mmsi": int(mmsi),
-            "name": (first_row["VesselName"] if pd.notna(first_row["VesselName"])
-                     else f"VESSEL {mmsi}"),
+            # Pseudonymised: the demo ranks vessels as investigation leads, and a
+            # real ship must never be shown as a spill suspect for a constructed
+            # incident. Tracks stay real; only the identity is replaced.
+            **pseudonym(i),
             "vessel_type": vessel_type_name(first_row["VesselType"]),
             # Real recorded dimensions where the corpus has them. Used only as a
             # size proxy when ranking response priority — never as a volume.
@@ -546,8 +544,8 @@ def build_fleet():
         })
 
     return {
-        "note": ("REAL AIS FLEET, CONSTRUCTED CO-PRESENCE. Vessel identities, MMSIs, "
-                 "coordinates, speed and course are taken as recorded in "
+        "note": ("REAL AIS FLEET, PSEUDONYMISED, CONSTRUCTED CO-PRESENCE. Coordinates, "
+                 "speed, course, type and dimensions are taken as recorded in "
                  "data/ais_reference/ais_dataset.csv (Gulf of Mexico traffic) — nothing "
                  "is invented, and no position is altered. What IS constructed is that "
                  "these vessels are at sea at the same time: each vessel's recorded "
@@ -559,7 +557,9 @@ def build_fleet():
                  "corpus at most 4 vessels are simultaneously live at any instant, "
                  "which is too few to monitor as a fleet. Unshifted, 10 of these 12 "
                  "vessels would not yet have arrived at t1 and 11 of 12 would be up to "
-                 "7.7 h stale at t3."),
+                 "7.7 h stale at t3. Names and MMSIs are pseudonyms (Vessel A-L, "
+                 "999xxxxxx) because the demo ranks vessels as investigation leads "
+                 "for a constructed incident; no real vessel is implicated."),
         "co_presence": "constructed",
         "co_presence_reason": ("The AIS corpus samples vessel transits, not continuous "
                                "surveillance; no window exists in which this many vessels "
@@ -572,6 +572,15 @@ def build_fleet():
         "simulation_seed": SIMULATION_SEED,
         "ships": ships,
     }
+
+
+def pseudonym(index):
+    """Stable display identity for the index-th fleet vessel (1-based).
+
+    999 is not an allocated maritime identification digit, so a pseudo-MMSI can
+    never collide with a real vessel's.
+    """
+    return {"mmsi": 999_000_000 + index, "name": f"Vessel {chr(ord('A') + index - 1)}"}
 
 
 def fill_clean_snapshots(ships, passes=("t1", "t2")):

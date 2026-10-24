@@ -1,7 +1,15 @@
 # Handoff — how the two models were produced
 
-This folder is the provenance record for the models in `backend/artifacts/`. Nothing in
-`cnn/` or `ais/` has been edited; `previous/` holds the models these replaced.
+This folder is the provenance record for the models in `backend/artifacts/`. The trained
+artifacts in `cnn/` and `ais/` have not been edited. `previous/` holds the models these
+replaced. The only later addition is `cnn/near_duplicate_report.json`, a read-only audit of
+the frozen model.
+
+**Training data.** The SAR chips are the CSIRO Sentinel-1 SAR oil/non-oil dataset
+([DOI 10.25919/4v55-dn16](https://doi.org/10.25919/4v55-dn16), CC BY-SA 4.0). The notebooks
+fetch them from a public GitHub mirror, which is a file-for-file copy of the release
+(5,630 chips, 3,725 / 1,905). The AIS corpus is a MarineCadastre.gov (BOEM/NOAA) export.
+See [`../DATA_LICENSES.md`](../DATA_LICENSES.md).
 
 ## Current models
 
@@ -15,7 +23,8 @@ This folder is the provenance record for the models in `backend/artifacts/`. Not
 | `oiltrace_cnn.py` | The module the notebook wrote. Identical to `backend/ml/oiltrace_cnn.py`. |
 | `cnn_test_metrics.json` | The held-out test result: 574 tiles, 451 unseen scenes, with 95% intervals. |
 | `cnn_split_manifest.csv` | Every tile, its scene and its split — what makes the split reproducible. |
-| `cnn_training_history.csv` | Per-epoch loss / validation metrics (50 epochs). |
+| `cnn_training_history.csv` | Per-epoch loss and validation metrics (50 epochs). Early stopping did not fire, and the best validation ROC-AUC was in epoch 50. |
+| `near_duplicate_report.json` | Perceptual-hash leakage audit of the split, and the frozen model re-scored without near-duplicates (`backend/scripts/check_near_duplicates.py`). |
 | `cnn_output_example.json`, `example_*.png` | The notebook's own example outputs. |
 | `requirements_cnn.txt` | Versions it was trained under. |
 
@@ -47,8 +56,10 @@ are the sample tiles.
 
 * **The shipped weights, run through the backend's own inference code, reproduce the
   notebook's test result exactly** — TN 370, FP 11, FN 10, TP 183. Re-run it with
-  `backend/scripts/replay_cnn_test_split.py` (it needs the public dataset; the script says
-  where to get it).
+  `backend/scripts/replay_cnn_test_split.py` (it needs the dataset; the script says where to
+  get it).
+* A perceptual-hash audit finds 58 test tiles with a near-duplicate in training. Without
+  them, accuracy is 96.12% and ROC-AUC 0.9930, essentially unchanged.
 * The checkpoint loads into the shipped architecture with no missing or unexpected keys.
 * The AIS model's calibration matches the notebook's.
 * The demo detects exactly the vessels the simulation seeded, with no false alarms on the
@@ -59,8 +70,9 @@ are the sample tiles.
 * The CNN's 96.3% accuracy is on scenes it never saw, with a 95% interval of 94.6–97.9%.
   The demo's tiles, however, come from the dataset it was trained on, so the demo's
   detections are **not** an accuracy test.
-* `Class 1 = oil spill` is taken from the dataset's own `_cls_N` naming
-  (`cnn_config.json` says so too). Confirm it with the data owner before relying on it.
+* `Class 1 = oil spill` (and class 0 = no oil features, including look-alikes) is the label
+  meaning documented by the dataset's authors at CSIRO. The `_cls_N` filename suffix
+  carries it.
 * The AIS model is unsupervised. It was checked by injecting known unusual behaviour into
   held-out vessels, not against real violations. "Anomalous" means unusual, not wrong.
 * The CNN is a binary classifier: no mask, area or look-alike discrimination.
